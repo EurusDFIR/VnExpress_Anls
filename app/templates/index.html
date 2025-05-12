@@ -1,0 +1,163 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Hero Section -->
+    <div class="bg-blue-600 text-white p-8 md:p-12 rounded-lg shadow-lg mb-12">
+        <h1 class="text-4xl md:text-5xl font-bold mb-4">Deep Insights into VnExpress News</h1>
+        <p class="text-lg md:text-xl mb-8">Analyze sentiment, topics, and community interactions for any VnExpress article</p>
+        <form method="POST" action="{{ url_for('main.analyze_new_article') }}" class="flex flex-col sm:flex-row items-center gap-4">
+            <input type="url" name="article_url" placeholder="Paste VnExpress article URL..."
+                   class="flex-grow p-4 rounded-md text-gray-800 focus:ring-2 focus:ring-yellow-400 focus:outline-none" required>
+            <button type="submit"
+                    class="bg-yellow-400 hover:bg-yellow-500 text-blue-800 font-bold py-4 px-8 rounded-md transition duration-150 w-full sm:w-auto">
+                <i class="fas fa-search-plus mr-2"></i> Analyze Now
+            </button>
+        </form>
+    </div>
+
+    <!-- Filter and Sort Section -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+        <form method="GET" action="{{ url_for('main.index') }}" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
+            <input type="hidden" name="q" value="{{ request.args.get('q', '') }}" />
+            <div>
+                <label for="category" class="block text-sm font-medium text-gray-700 mb-1">Filter by Category</label>
+                <select id="category" name="category"
+                        class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                <div class="flex items-center space-x-2">
+                    <input type="date" id="date_from" name="date_from" value="{{ current_date_from or '' }}"
+                           class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <span class="text-gray-500">to</span>
+                    <input type="date" id="date_to" name="date_to" value="{{ current_date_to or '' }}"
+                           class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label for="sort_by" class="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+                <select id="sort_by" name="sort_by"
+                        class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="newest_first" {% if current_sort_by == 'newest_first' %}selected{% endif %}>Newest First</option>
+                    <option value="oldest_first" {% if current_sort_by == 'oldest_first' %}selected{% endif %}>Oldest First</option>
+                    <option value="most_comments" {% if current_sort_by == 'most_comments' %}selected{% endif %}>Most Comments</option>
+                    {# Thêm các lựa chọn sort khác #}
+                </select>
+            </div>
+
+            <div class="md:col-start-4 lg:col-start-4">
+                 <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-150">
+                    Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Latest Analyzed Articles Section -->
+    <h2 class="text-3xl font-semibold text-gray-800 mb-6">Latest Analyzed Articles</h2>
+    {% if articles %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {% for article in articles %}
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+            {# Giả sử bạn có một placeholder cho thumbnail #}
+            <img src="{{ article.image_url or url_for('static', filename='images/article_placeholder.png') }}" alt="Article thumbnail" class="w-full h-48 object-cover">
+            
+            <div class="p-6 flex flex-col flex-grow">
+                <div class="flex justify-between items-center mb-2">
+                    {% if article.category %}
+                    <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full">{{ article.category }}</span>
+                    {% endif %}
+                    {% if article.publish_datetime %}
+                    <span class="text-xs text-gray-500">{{ article.publish_datetime.strftime('%b %d, %Y') }}</span> 
+                    {# Hoặc dùng thư viện humanize để hiển thị "2 hours ago" #}
+                    {% elif article.published_date_str %}
+                     <span class="text-xs text-gray-500">{{ article.published_date_str.split(',')[1] if ',' in article.published_date_str else article.published_date_str }}</span>
+                    {% endif %}
+                </div>
+                <h3 class="text-xl font-semibold text-gray-800 mb-2 hover:text-blue-600 transition duration-150">
+                    <a href="{{ url_for('main.article_detail', article_id=article.id) }}">{{ article.title or 'N/A' }}</a>
+                </h3>
+                <p class="text-gray-600 text-sm mb-4 flex-grow">{{ (article.sapo or article.content or '')[:150] }}{% if (article.sapo or article.content or '')|length > 150 %}...{% endif %}</p>
+                <div class="flex items-center justify-between text-sm text-gray-500 mt-auto">
+                    <div class="flex items-center">
+                        {# Biểu tượng cảm xúc giả lập hoặc dựa trên sentiment_score nếu có #}
+                        {% if article.sentiment_score and article.sentiment_score > 0.1 %}
+                            <span class="text-green-500 mr-1"><i class="far fa-smile"></i></span>
+                        {% elif article.sentiment_score and article.sentiment_score < -0.1 %}
+                            <span class="text-red-500 mr-1"><i class="far fa-frown"></i></span>
+                        {% else %}
+                            <span class="text-yellow-500 mr-1"><i class="far fa-meh"></i></span> 
+                        {% endif %}
+                        <span>{{ article.total_comments_count or 0 }} <i class="far fa-comments ml-1"></i></span>
+                    </div>
+                    <a href="{{ url_for('main.article_detail', article_id=article.id) }}" class="text-blue-600 hover:text-blue-800 font-semibold">
+                        View Analysis <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    <div class="mt-12">
+        {% if pagination %}
+        <nav class="flex justify-center">
+            <ul class="inline-flex items-center -space-x-px">
+                {# Previous Page Link #}
+                <li>
+                    <a href="{{ url_for('main.index', page=pagination.prev_num) if pagination.has_prev else '#' }}"
+                       class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700
+                              {% if not pagination.has_prev %} opacity-50 cursor-not-allowed {% endif %}">
+                        Previous
+                    </a>
+                </li>
+                {# Page Numbers #}
+                {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        {% if pagination.page == page_num %}
+                        <li>
+                            <a href="#" aria-current="page"
+                               class="z-10 py-2 px-3 leading-tight text-blue-600 bg-blue-50 border border-blue-300 hover:bg-blue-100 hover:text-blue-700">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% else %}
+                        <li>
+                            <a href="{{ url_for('main.index', page=page_num) }}"
+                               class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% else %}
+                    <li class="disabled"><span class="py-2 px-3 leading-tight text-gray-400">…</span></li>
+                    {% endif %}
+                {% endfor %}
+                {# Next Page Link #}
+                <li>
+                    <a href="{{ url_for('main.index', page=pagination.next_num) if pagination.has_next else '#' }}"
+                       class="py-2 px-3 leading-tight text-gray-500 bg-white rounded-r-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700
+                              {% if not pagination.has_next %} opacity-50 cursor-not-allowed {% endif %}">
+                        Next
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="text-center text-gray-600">No articles found matching your criteria or no articles have been analyzed yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
