@@ -1,13 +1,13 @@
 {% extends "layouts/base.html" %} {% block title %}{{ article.title or 'Article
 Detail' }}{% endblock %} {% block content %}
-<div class="container mx-auto px-4 py-8">
+<div class="container mx-auto px-4 py-8 animate-fade-in">
   <!-- Breadcrumbs -->
-  <nav class="text-sm mb-4" aria-label="Breadcrumb">
+  <nav class="text-sm mb-4 animate-slide-down" aria-label="Breadcrumb">
     <ol class="list-none p-0 inline-flex">
       <li class="flex items-center">
         <a
           href="{{ url_for('main.index') }}"
-          class="text-gray-500 hover:text-blue-600"
+          class="text-gray-500 hover:text-blue-600 font-semibold transition-colors duration-150"
           >Home</a
         >
         <svg
@@ -33,56 +33,59 @@ Detail' }}{% endblock %} {% block content %}
         </svg>
       </li>
       <li>
-        <span class="text-gray-700 font-medium">Article Detail</span>
+        <span class="text-gray-700 font-bold">Article Detail</span>
       </li>
     </ol>
   </nav>
 
   <!-- Article Header -->
-  <div class="mb-8">
+  <div class="mb-8 animate-slide-up">
     {% if article.category %}
     <span
-      class="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full mb-2 inline-block"
+      class="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full mb-2 inline-block shadow"
       >{{ article.category }}</span
     >
     {% endif %}
-    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+    <h1
+      class="text-3xl md:text-4xl font-extrabold text-gray-900 mb-3 drop-shadow-lg"
+    >
       {{ article.title or 'N/A' }}
     </h1>
     <div class="text-sm text-gray-500 flex items-center">
       {% if article.author and article.author != "Không rõ" %}
-      <span>By {{ article.author }}</span>
+      <span
+        >By
+        <span class="font-semibold text-blue-700"
+          >{{ article.author }}</span
+        ></span
+      >
       <span class="mx-2">•</span>
       {% endif %} {% if article.publish_datetime %}
       <span>{{ article.publish_datetime.strftime('%B %d, %Y %I:%M %p') }}</span>
       {% elif article.published_date_str %}
       <span>{{ article.published_date_str }}</span>
       {% endif %} {# Nút Share - bạn có thể thêm JavaScript để xử lý #}
-      <button class="ml-auto text-gray-600 hover:text-blue-600">
+      <button
+        class="ml-auto text-gray-600 hover:text-blue-600 transition-colors duration-150"
+      >
         <i class="fas fa-share-alt"></i>
       </button>
     </div>
   </div>
 
   <!-- Article Image (Dynamic) -->
-  {% if article.image_url %}
-  <img
-    src="{{ article.image_url }}"
-    alt="Article image"
-    class="w-full h-auto md:h-96 object-cover rounded-lg shadow-md mb-8"
-  />
-  {% else %}
-  <img
-    src="{{ url_for('static', filename='images/article_placeholder_large.png') }}"
-    alt="Article image"
-    class="w-full h-auto md:h-96 object-cover rounded-lg shadow-md mb-8"
-  />
-  {% endif %}
+  <div class="w-full flex justify-center animate-fade-in">
+    <img
+      src="{{ article.image_url or url_for('static', filename='images/article_placeholder_large.png') }}"
+      alt="Article image"
+      class="w-full max-w-3xl h-auto md:h-96 object-cover rounded-2xl shadow-xl mb-8 border-4 border-blue-100"
+    />
+  </div>
 
   <!-- Article Content -->
-  <div class="prose prose-lg max-w-none text-gray-800 mb-12">
+  <div class="prose prose-lg max-w-none text-gray-800 mb-12 animate-fade-in">
     {% if article.sapo %}
-    <p class="lead font-semibold">{{ article.sapo }}</p>
+    <p class="lead font-semibold text-blue-700">{{ article.sapo }}</p>
     {% endif %} {% if article.content %} {{ article.content | nl2br | safe }} {#
     nl2br để chuyển \n thành <br />, safe để render HTML nếu có #} {% else %}
     <p>No content available for this article.</p>
@@ -90,35 +93,56 @@ Detail' }}{% endblock %} {% block content %}
   </div>
 
   <!-- Analysis Sections (Hiện tại dùng dữ liệu giả lập hoặc ẩn đi) -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12 animate-fade-in">
     <!-- Sentiment Analysis Placeholder -->
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        Sentiment Analysis
+    <div
+      class="bg-gradient-to-br from-green-100 to-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200"
+    >
+      <h3 class="text-xl font-bold text-green-700 mb-4 flex items-center">
+        <i class="far fa-smile mr-2"></i> Sentiment Analysis
       </h3>
       {% if sentiment_data and sentiment_data.total_comments > 0 %}
-      <p>Positive: {{ sentiment_data.positive }}%</p>
-      <p>Negative: {{ sentiment_data.negative }}%</p>
-      <p>Neutral: {{ sentiment_data.neutral }}%</p>
+      <p>
+        Positive:
+        <span class="font-semibold text-green-600">
+          {{ sentiment_data.positive }}%
+        </span>
+      </p>
+      <p>
+        Negative:
+        <span class="font-semibold text-red-600">
+          {{ sentiment_data.negative }}%
+        </span>
+      </p>
+      <p>
+        Neutral:
+        <span class="font-semibold text-yellow-600">
+          {{ sentiment_data.neutral }}%
+        </span>
+      </p>
       <p class="mt-2 text-sm text-gray-600">
         Based on {{ sentiment_data.total_comments }} comments.
       </p>
-      {# Thêm biểu đồ ở đây sau này #} {% else %}
+      {% else %}
       <p class="text-gray-500">No sentiment data available yet.</p>
       {% endif %}
     </div>
 
     <!-- Discussion Topics Placeholder -->
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        Discussion Topics
+    <div
+      class="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200"
+    >
+      <h3 class="text-xl font-bold text-blue-700 mb-4 flex items-center">
+        <i class="fas fa-comments mr-2"></i> Discussion Topics
       </h3>
       {% if discussion_topics %}
-      <ul>
+      <ul class="list-disc pl-5">
         {% for topic in discussion_topics %}
         <li>
-          {{ topic.name }} ({{ topic.percentage }}%) - Keywords: {{
-          topic.keywords | join(', ') }}
+          <span class="font-semibold text-blue-800">{{ topic.name }}</span> ( {{
+          topic.percentage }}%) -
+          <span class="text-gray-600">Keywords:</span>
+          <span class="text-gray-700"> {{ topic.keywords | join(', ') }} </span>
         </li>
         {% endfor %}
       </ul>
@@ -128,29 +152,40 @@ Detail' }}{% endblock %} {% block content %}
     </div>
 
     <!-- Interaction Analysis Placeholder -->
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <h3 class="text-xl font-semibold text-gray-800 mb-4">
-        Interaction Analysis
+    <div
+      class="bg-gradient-to-br from-yellow-100 to-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200"
+    >
+      <h3 class="text-xl font-bold text-yellow-700 mb-4 flex items-center">
+        <i class="fas fa-users mr-2"></i> Interaction Analysis
       </h3>
-      <p>Total Comments: {{ interaction_data.total_comments }}</p>
-      {% if interaction_data.total_comments > 0 %} {# Thêm các thông tin khác từ
-      interaction_data #} {% else %}
+      <p>
+        Total Comments:
+        <span class="font-semibold text-blue-700">
+          {{ interaction_data.total_comments }}
+        </span>
+      </p>
+      {% if interaction_data.total_comments > 0 %}
+      <!-- Thêm các thông tin khác từ interaction_data nếu có -->
+      {% else %}
       <p class="text-gray-500">No interaction data available yet.</p>
       {% endif %}
     </div>
   </div>
 
   <!-- Comments Section (Tạm thời để trống hoặc thông báo) -->
-  <div class="bg-white p-6 rounded-lg shadow-md">
-    <h3 class="text-2xl font-semibold text-gray-800 mb-6">
-      Comments ({{ article.total_comments_count or 0 }})
+  <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in">
+    <h3 class="text-2xl font-bold text-blue-800 mb-6 flex items-center">
+      <i class="far fa-comments mr-2"></i> Comments ({{
+      article.total_comments_count or 0 }})
     </h3>
     {% if comments %}
     <div class="space-y-6">
       {% for comment in comments %}
-      <div class="comment-item border-b border-gray-200 pb-4">
+      <div class="comment-item border-b border-gray-200 pb-4 animate-fade-in">
         <p>
-          <strong>{{ comment.user_name or 'Anonymous' }}</strong>
+          <strong class="text-blue-700"
+            >{{ comment.user_name or 'Anonymous' }}</strong
+          >
           <span class="text-xs text-gray-500 ml-2">
             {{ comment.comment_datetime.strftime('%b %d, %Y %I:%M %p') if
             comment.comment_datetime else comment.comment_date_str }}
@@ -158,8 +193,12 @@ Detail' }}{% endblock %} {% block content %}
         </p>
         <p class="text-gray-700 mt-1">{{ comment.comment_text }}</p>
         <div class="text-xs text-gray-500 mt-2">
-          <span>Likes: {{ comment.likes_count or 0 }}</span>
-          {# Thêm nút Reply và hiển thị replies sau này #}
+          <span>
+            Likes:
+            <span class="font-semibold text-yellow-600">
+              {{ comment.likes_count or 0 }}
+            </span>
+          </span>
         </div>
       </div>
       {% endfor %}
@@ -169,42 +208,50 @@ Detail' }}{% endblock %} {% block content %}
     <nav class="flex justify-center mt-8">
       <ul class="inline-flex items-center -space-x-px">
         <li>
-          <a href="{{ url_for('main.article_detail', article_id=article.id, page=comment_pagination.prev_num) if comment_pagination.has_prev else '#' }}"
-             class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700 {% if not comment_pagination.has_prev %} opacity-50 cursor-not-allowed {% endif %}">
+          <a
+            href="{{ url_for('main.article_detail', article_id=article.id, page=comment_pagination.prev_num) if comment_pagination.has_prev else '#' }}"
+            class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700 {% if not comment_pagination.has_prev %} opacity-50 cursor-not-allowed {% endif %} transition-all duration-150"
+          >
             Previous
           </a>
         </li>
-        {% for page_num in comment_pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
-          {% if page_num %}
-            {% if comment_pagination.page == page_num %}
-            <li>
-              <a href="#" aria-current="page"
-                 class="z-10 py-2 px-3 leading-tight text-blue-600 bg-blue-50 border border-blue-300 hover:bg-blue-100 hover:text-blue-700">
-                {{ page_num }}
-              </a>
-            </li>
-            {% else %}
-            <li>
-              <a href="{{ url_for('main.article_detail', article_id=article.id, page=page_num) }}"
-                 class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700">
-                {{ page_num }}
-              </a>
-            </li>
-            {% endif %}
-          {% else %}
-            <li class="disabled"><span class="py-2 px-3 leading-tight text-gray-400">…</span></li>
-          {% endif %}
-        {% endfor %}
+        {% for page_num in comment_pagination.iter_pages(left_edge=1,
+        right_edge=1, left_current=1, right_current=2) %} {% if page_num %} {%
+        if comment_pagination.page == page_num %}
         <li>
-          <a href="{{ url_for('main.article_detail', article_id=article.id, page=comment_pagination.next_num) if comment_pagination.has_next else '#' }}"
-             class="py-2 px-3 leading-tight text-gray-500 bg-white rounded-r-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700 {% if not comment_pagination.has_next %} opacity-50 cursor-not-allowed {% endif %}">
+          <a
+            href="#"
+            aria-current="page"
+            class="z-10 py-2 px-3 leading-tight text-blue-600 bg-blue-50 border border-blue-300 hover:bg-blue-100 hover:text-blue-700 transition-all duration-150"
+          >
+            {{ page_num }}
+          </a>
+        </li>
+        {% else %}
+        <li>
+          <a
+            href="{{ url_for('main.article_detail', article_id=article.id, page=page_num) }}"
+            class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150"
+          >
+            {{ page_num }}
+          </a>
+        </li>
+        {% endif %} {% else %}
+        <li class="disabled">
+          <span class="py-2 px-3 leading-tight text-gray-400">…</span>
+        </li>
+        {% endif %} {% endfor %}
+        <li>
+          <a
+            href="{{ url_for('main.article_detail', article_id=article.id, page=comment_pagination.next_num) if comment_pagination.has_next else '#' }}"
+            class="py-2 px-3 leading-tight text-gray-500 bg-white rounded-r-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700 {% if not comment_pagination.has_next %} opacity-50 cursor-not-allowed {% endif %} transition-all duration-150"
+          >
             Next
           </a>
         </li>
       </ul>
     </nav>
-    {% endif %}
-    {% else %}
+    {% endif %} {% else %}
     <p class="text-gray-500">
       No comments to display for this article yet, or comment scraping is
       pending.
@@ -212,4 +259,44 @@ Detail' }}{% endblock %} {% block content %}
     {% endif %}
   </div>
 </div>
+
+<style>
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .animate-fade-in {
+    animation: fade-in 1s ease;
+  }
+  @keyframes slide-down {
+    from {
+      transform: translateY(-40px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  .animate-slide-down {
+    animation: slide-down 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes slide-up {
+    from {
+      transform: translateY(40px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  .animate-slide-up {
+    animation: slide-up 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+</style>
 {% endblock %}

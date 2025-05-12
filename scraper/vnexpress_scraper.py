@@ -101,13 +101,13 @@ def scrape_article_details_and_save(article_url, db_session):
         if date_meta_tag and 'content' in date_meta_tag.attrs:
             date_str = date_meta_tag['content']
         else:
-            date_span_tag = soup.find('span', class_='date') # Hoặc time_box_left
+            date_span_tag = soup.find('span', class_='date')
             if date_span_tag: date_str = date_span_tag.get_text(strip=True)
 
         publish_datetime_obj = parse_datetime_from_str(date_str)
 
         author = "Không rõ" # Default
-        # Tìm tác giả (có thể nằm ở nhiều chỗ)
+    
         author_elements = soup.select('p.author_mail strong, p[style*="text-align:right"] strong, article.fck_detail > p:last-child strong')
         if author_elements: # Lấy tác giả đầu tiên tìm thấy
             author = author_elements[0].get_text(strip=True)
@@ -157,7 +157,7 @@ def scrape_article_details_and_save(article_url, db_session):
 
     except requests.exceptions.RequestException as e:
         print(f"Lỗi Request khi scrape {article_url}: {e}")
-        db_session.rollback() # Quan trọng: rollback nếu có lỗi
+        db_session.rollback() 
         return None
     except Exception as ex:
         print(f"Lỗi không xác định khi scrape và lưu {article_url}: {ex}")
