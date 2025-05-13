@@ -53,7 +53,9 @@
         >
           <i class="fas fa-newspaper mr-2"></i>VnExpress Analyzer
         </a>
-        <div class="flex items-center space-x-4 w-full justify-end md:justify-normal">
+        <div
+          class="flex items-center space-x-4 w-full justify-end md:justify-normal"
+        >
           <!-- DateTime Display -->
           <div
             id="datetime-display"
@@ -94,7 +96,7 @@
               </button>
               <div
                 id="suggestions-box"
-                class="absolute left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 hidden"
+                class="absolute left-0 right-0 top-full w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 hidden"
               ></div>
             </form>
           </div>
@@ -175,14 +177,34 @@
           if (!resp.ok) throw new Error("Network error");
           const data = await resp.json();
           if (data.suggestions && data.suggestions.length > 0) {
+            const keywords = data.keywords || [];
             box.innerHTML = data.suggestions
-              .map(
-                (s) =>
-                  `<div class='px-4 py-2 hover:bg-blue-100 cursor-pointer' onclick=\"document.getElementById('search-input').value='${s.replace(
-                    /'/g,
-                    "\\'"
-                  )}'; document.querySelector('form[method=GET]').submit();\">${s}</div>`
-              )
+              .map((s) => {
+                // Chỉ loại bỏ ký tự xuống dòng, tab, giữ nguyên dấu cách hợp lệ
+                let label = s.value.replace(/[\n\r\t]+/g, " ").trim();
+                // Highlight keyword
+                keywords.forEach((kw) => {
+                  if (kw.length > 0) {
+                    const re = new RegExp(
+                      `(${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+                      "gi"
+                    );
+                    label = label.replace(
+                      re,
+                      '<span class="font-bold text-blue-600">$1</span>'
+                    );
+                  }
+                });
+                let icon = "";
+                if (s.type === "category")
+                  icon = '<i class="fas fa-tag text-yellow-500 mr-2"></i>';
+                if (s.type === "author")
+                  icon = '<i class="fas fa-user text-green-600 mr-2"></i>';
+                return `<div class='px-4 py-2 hover:bg-blue-100 cursor-pointer flex items-center whitespace-nowrap' onclick=\"document.getElementById('search-input').value='${s.value
+                  .replace(/'/g, "\\'")
+                  .replace(/[\n\r\t]+/g, " ")
+                  .trim()}'; document.querySelector('form[method=GET]').submit();\">${icon}${label}</div>`;
+              })
               .join("");
             box.classList.remove("hidden");
           } else {

@@ -83,13 +83,34 @@ Detail' }}{% endblock %} {% block content %}
   </div>
 
   <!-- Article Content -->
-  <div class="prose prose-lg max-w-none text-gray-800 mb-12 animate-fade-in">
+  <div
+    class="prose prose-lg max-w-none text-gray-800 mb-12 animate-fade-in bg-white/80 rounded-2xl shadow-lg p-8 border border-blue-100 relative"
+  >
     {% if article.sapo %}
-    <p class="lead font-semibold text-blue-700">{{ article.sapo }}</p>
-    {% endif %} {% if article.content %} {{ article.content | nl2br | safe }} {#
-    nl2br để chuyển \n thành <br />, safe để render HTML nếu có #} {% else %}
+    <blockquote
+      class="border-l-4 border-blue-400 pl-4 italic text-blue-700 font-semibold bg-blue-50/60 rounded mb-6 animate-slide-down"
+    >
+      {{ article.sapo }}
+    </blockquote>
+    {% endif %} {% if article.content %}
+    <div class="space-y-6 leading-relaxed text-lg">
+      {% for paragraph in article.content.split('\n') %} {% if paragraph.strip()
+      %}
+      <p
+        class="hover:bg-blue-50/60 rounded transition-all duration-200 px-2 py-1"
+      >
+        {{ paragraph|safe }}
+      </p>
+      {% endif %} {% endfor %}
+    </div>
+    {% else %}
     <p>No content available for this article.</p>
     {% endif %}
+    <div
+      class="absolute right-4 top-4 opacity-10 text-7xl pointer-events-none select-none hidden md:block"
+    >
+      <i class="fas fa-newspaper"></i>
+    </div>
   </div>
 
   <!-- Analysis Sections (Hiện tại dùng dữ liệu giả lập hoặc ẩn đi) -->

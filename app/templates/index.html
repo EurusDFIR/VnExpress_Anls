@@ -9,8 +9,12 @@
         <div class="absolute right-0 top-0 opacity-20 pointer-events-none select-none hidden md:block">
             <i class="fas fa-chart-line fa-8x"></i>
         </div>
-        <h1 class="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Deep Insights into VnExpress News</h1>
-        <p class="text-lg md:text-xl mb-8 font-medium">Analyze sentiment, topics, and community interactions for any VnExpress article</p>
+        <h1 class="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">
+          Deep Insights into VnExpress News
+        </h1>
+        <p class="text-lg md:text-xl mb-8 font-medium">
+          Analyze sentiment, topics, and community interactions for any VnExpress article
+        </p>
         <form method="POST" action="{{ url_for('main.analyze_new_article') }}" class="flex flex-col sm:flex-row items-center gap-4">
             <input type="url" name="article_url" placeholder="Paste VnExpress article URL..."
                    class="flex-grow p-4 rounded-full text-gray-800 focus:ring-4 focus:ring-yellow-400 focus:outline-none shadow-lg transition-all duration-200" required>

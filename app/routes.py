@@ -6,6 +6,22 @@ from scraper.vnexpress_scraper import scrape_article_details_and_save, get_artic
 from urllib.parse import urlparse
 from datetime import datetime
 from flask import Blueprint
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+try:
+    import google.generativeai as genai
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    if GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+    else:
+        genai = None
+except ImportError:
+    genai = None
+    GEMINI_API_KEY = None
+
 main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
@@ -106,18 +122,30 @@ def search_suggest():
     q = request.args.get('q', '').strip()
     suggestions = []
     if q and len(q) >= 2:
-        search = f"%{q}%"
-        title_matches = Article.query.filter(Article.title.ilike(search)).limit(3).all()
-        category_matches = Article.query.filter(Article.category.ilike(search)).limit(2).all()
-        author_matches = Article.query.filter(Article.author.ilike(search)).limit(2).all()
-        for art in title_matches:
-            if art.title and art.title not in suggestions:
-                suggestions.append(art.title)
-        for art in category_matches:
-            if art.category and art.category not in suggestions:
-                suggestions.append(art.category)
-        for art in author_matches:
-            if art.author and art.author not in suggestions:
-                suggestions.append(art.author)
-    return {"suggestions": suggestions[:7]}
+        keywords = [kw.strip() for kw in q.lower().split() if kw.strip()]
+        if keywords:
+            # Ưu tiên tiêu đề chứa từ khóa ở đầu, sau đó mới đến category/author
+            title_matches = []
+            category_matches = []
+            author_matches = []
+            for kw in keywords:
+                like_kw = f"%{kw}%"
+                title_matches += Article.query.filter(Article.title.ilike(like_kw)).order_by(Article.publish_datetime.desc()).all()
+                category_matches += Article.query.filter(Article.category.ilike(like_kw)).order_by(Article.publish_datetime.desc()).all()
+                author_matches += Article.query.filter(Article.author.ilike(like_kw)).order_by(Article.publish_datetime.desc()).all()
+            # Loại trùng lặp, ưu tiên tiêu đề, sau đó category, author
+            seen = set()
+            for art in title_matches:
+                if art.title and art.title not in seen:
+                    suggestions.append({'type': 'title', 'value': art.title})
+                    seen.add(art.title)
+            for art in category_matches:
+                if art.category and art.category not in seen:
+                    suggestions.append({'type': 'category', 'value': art.category})
+                    seen.add(art.category)
+            for art in author_matches:
+                if art.author and art.author not in seen:
+                    suggestions.append({'type': 'author', 'value': art.author})
+                    seen.add(art.author)
+    return {"suggestions": suggestions[:15], "keywords": keywords}
 
