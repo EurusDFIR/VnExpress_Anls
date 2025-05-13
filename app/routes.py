@@ -80,15 +80,25 @@ def article_detail(article_id):
     article = db.session.get(Article, article_id)
     if not article:
         abort(404)
-    mock_sentiment_data = {"positive": 0, "negative": 0, "neutral": 0, "total_comments": 0}
+    # Sử dụng số lượng bình luận thực tế trong DB
+    real_comment_count = article.comments.count()
+    # Đồng bộ lại trường total_comment_count nếu bị lệch
+    if article.total_comment_count != real_comment_count:
+        article.total_comment_count = real_comment_count
+        db.session.commit()
+    mock_sentiment_data = {"positive": 0, "negative": 0, "neutral": 0, "total_comments": real_comment_count}
     mock_discussion_topics = []
     mock_interaction_data = {
-        "total_comments": article.total_comment_count if article.total_comment_count else 0,
+        "total_comments": real_comment_count,
         "original_comments": 0, "replies": 0, "active_threads": 0,
         "top_users": [], "most_liked_comment": None
     }
-    comments_on_page = []
-    comments_pagination = None
+    # --- Fetch comments for this article, paginated ---
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    comments_query = article.comments.order_by(Article.comments.property.mapper.class_.comment_datetime.desc().nullslast(), Article.comments.property.mapper.class_.id.desc())
+    comments_pagination = comments_query.paginate(page=page, per_page=per_page, error_out=False)
+    comments_on_page = comments_pagination.items
     return render_template('article_detail.html', title=article.title, article=article,
                            comments=comments_on_page, comment_pagination=comments_pagination,
                            sentiment_data=mock_sentiment_data,
@@ -111,7 +121,10 @@ def analyze_new_article():
         return redirect(url_for('main.article_detail', article_id=existing_article.id))
     newly_scraped_article = scrape_article_details_and_save(article_url, db.session)
     if newly_scraped_article and newly_scraped_article.id:
-        flash(f'Đã phân tích thành công bài viết: {newly_scraped_article.title}', 'success')
+        # Gọi scrape bình luận ngay sau khi scrape bài viết
+        from scraper.vnexpress_scraper import scrape_and_save_comments
+        num_comments = scrape_and_save_comments(newly_scraped_article, db.session)
+        flash(f'Đã phân tích thành công bài viết: {newly_scraped_article.title} (Bình luận: {num_comments})', 'success')
         return redirect(url_for('main.article_detail', article_id=newly_scraped_article.id))
     else:
         flash('Không thể phân tích bài viết. Vui lòng thử lại hoặc kiểm tra URL.', 'danger')

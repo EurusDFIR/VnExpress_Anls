@@ -252,12 +252,20 @@ def click_element_if_exists(driver, by, value, timeout=5):
         print(f"Error clicking element {value}: {e}")
         return False
 
+try:
+    from .playwright_comment_fetcher import fetch_comments_html_sync
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
+def fetch_comments_html(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False):
+    if PLAYWRIGHT_AVAILABLE:
+        return fetch_comments_html_sync(article_url, max_load_more_clicks, max_reply_clicks_per_comment, debug_save)
+    else:
+        return fetch_raw_comments_html_with_selenium(article_url, max_load_more_clicks, max_reply_clicks_per_comment)
+
 def fetch_raw_comments_html_with_selenium(article_url, max_load_more_clicks=5, max_reply_clicks_per_comment=2):
-    """
-    Sử dụng Selenium để tải động bình luận và trả về HTML của phần bình luận.
-    max_load_more_clicks: Số lần click tối đa vào nút "Xem thêm ý kiến".
-    max_reply_clicks_per_comment: Số lần click tối đa vào "Xem trả lời" cho mỗi bình luận gốc.
-    """
+    # Deprecated: giữ lại để fallback nếu Playwright không có
     print(f"Selenium: Bắt đầu tải bình luận cho {article_url}")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
@@ -281,16 +289,13 @@ def fetch_raw_comments_html_with_selenium(article_url, max_load_more_clicks=5, m
         # 1. Click "Xem thêm ý kiến" để tải các bình luận gốc
         for i in range(max_load_more_clicks):
             print(f"Selenium: Click 'Xem thêm ý kiến' lần {i+1}/{max_load_more_clicks}")
-            # Selector cho nút "Xem thêm ý kiến"
-            # Cần tìm ID hoặc một class đủ duy nhất. Dựa vào HTML bạn gửi, có thể là `#show_more_coment`
-            # Hoặc một selector dựa trên text nếu ID/class không ổn định
-            clicked_load_more = click_element_if_exists(driver, By.CSS_SELECTOR, "div.view_more_coment > a#show_more_coment") # Hoặc By.ID, "show_more_coment"
+            # Sử dụng đúng selector ID cho nút "Xem thêm ý kiến"
+            clicked_load_more = click_element_if_exists(driver, By.ID, "show_more_coment")
             if clicked_load_more:
                 time.sleep(3) # Chờ bình luận tải thêm
             else:
                 print("Selenium: Không tìm thấy hoặc không click được nút 'Xem thêm ý kiến'.")
                 break
-        
         print("Selenium: Đã click xong 'Xem thêm ý kiến' (hoặc đạt giới hạn).")
 
         # 2. (Nâng cao) Click "X trả lời" cho các bình luận đã tải
@@ -520,30 +525,21 @@ def scrape_and_save_comments(article_db_object, db_session):
     if not article_db_object or not article_db_object.url:
         print("Đối tượng bài viết không hợp lệ cho scrape comments.")
         return 0
-
-    # 1. Dùng Selenium để lấy HTML của khối bình luận đã tải đầy đủ
-    comment_html_content = fetch_raw_comments_html_with_selenium(article_db_object.url)
-
+    # 1. Dùng Playwright (hoặc Selenium fallback) để lấy HTML của khối bình luận đã tải đầy đủ
+    comment_html_content = fetch_comments_html(article_db_object.url)
     if not comment_html_content:
         print(f"Không lấy được HTML bình luận cho {article_db_object.url}")
         return 0
-    
     # 2. Parse HTML và lưu vào DB
     num_saved = parse_comments_from_html(comment_html_content, article_db_object.id, db_session)
-
     # 3. Cập nhật total_comment_count cho bài viết
-    if num_saved > 0 or article_db_object.total_comment_count is None: # Chỉ query lại nếu có cmt mới hoặc chưa có count
-        # Đếm lại tổng số bình luận cho bài viết này từ DB (chính xác hơn)
-        # total_db_comments = db_session.query(Comment).filter_by(article_id=article_db_object.id).count()
-        # article_db_object.total_comment_count = total_db_comments
-        # Hoặc nếu chỉ muốn cộng dồn số lượng mới scrape được (ít chính xác hơn nếu có xóa cmt trên site)
+    if num_saved > 0 or article_db_object.total_comment_count is None:
         article_db_object.total_comment_count = (article_db_object.total_comment_count or 0) + num_saved
         try:
             db_session.commit()
         except Exception as e:
             db_session.rollback()
             print(f"Lỗi khi cập nhật total_comment_count: {e}")
-
     return num_saved
 
 

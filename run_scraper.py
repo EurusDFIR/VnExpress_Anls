@@ -10,7 +10,7 @@ def main_scrape_logic():
         "Thế giới": "https://vnexpress.net/the-gioi",
         "Kinh doanh": "https://vnexpress.net/kinh-doanh",
         "Công nghệ": "https://vnexpress.net/khoa-hoc-cong-nghe",
-        # Thêm các chuyên mục khác bạn muốn
+    
     }
     max_articles_per_category = 5  # Số lượng bài viết tối đa để scrape từ mỗi chuyên mục
 

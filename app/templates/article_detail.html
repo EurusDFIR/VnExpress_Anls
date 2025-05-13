@@ -64,7 +64,19 @@ Detail' }}{% endblock %} {% block content %}
       <span>{{ article.publish_datetime.strftime('%B %d, %Y %I:%M %p') }}</span>
       {% elif article.published_date_str %}
       <span>{{ article.published_date_str }}</span>
-      {% endif %} {# Nút Share - bạn có thể thêm JavaScript để xử lý #}
+      {% endif %} {% if article.url %}
+      <div class="mt-2">
+        <a
+          href="{{ article.url }}"
+          target="_blank"
+          rel="noopener"
+          class="text-blue-600 hover:underline text-sm"
+        >
+          Xem bài gốc trên VnExpress
+          <i class="fas fa-external-link-alt ml-1"></i>
+        </a>
+      </div>
+      {% endif %}
       <button
         class="ml-auto text-gray-600 hover:text-blue-600 transition-colors duration-150"
       >
@@ -197,7 +209,7 @@ Detail' }}{% endblock %} {% block content %}
   <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in">
     <h3 class="text-2xl font-bold text-blue-800 mb-6 flex items-center">
       <i class="far fa-comments mr-2"></i> Comments ({{
-      article.total_comments_count or 0 }})
+      interaction_data.total_comments }})
     </h3>
     {% if comments %}
     <div class="space-y-6">
@@ -280,6 +292,51 @@ Detail' }}{% endblock %} {% block content %}
     {% endif %}
   </div>
 </div>
+
+<!-- Loading Spinner Overlay -->
+<div
+  id="loading-overlay"
+  class="fixed inset-0 bg-white bg-opacity-70 flex flex-col items-center justify-center z-50 hidden"
+>
+  <div class="flex flex-col items-center">
+    <svg
+      class="animate-spin h-12 w-12 text-blue-600 mb-4"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        class="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        stroke-width="4"
+      ></circle>
+      <path
+        class="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v8z"
+      ></path>
+    </svg>
+    <span class="text-lg text-blue-700 font-semibold animate-pulse"
+      >Đang tải dữ liệu, vui lòng chờ...</span
+    >
+  </div>
+</div>
+
+<script>
+  // Hiển thị overlay khi submit form hoặc khi cần loading
+  document.addEventListener("DOMContentLoaded", function () {
+    var forms = document.querySelectorAll("form");
+    forms.forEach(function (form) {
+      form.addEventListener("submit", function () {
+        document.getElementById("loading-overlay").classList.remove("hidden");
+      });
+    });
+  });
+  // Nếu muốn show overlay khi paste URL, có thể thêm trigger ở đây
+</script>
 
 <style>
   @keyframes fade-in {
