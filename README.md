@@ -109,3 +109,19 @@ python update_article_images.py
   python -m playwright install
   ```
 - Có thể cần chỉnh sửa `requirements.txt` nếu môi trường đặc biệt.
+
+### Demo
+
+#### Trang chủ
+
+![Trang chủ](static/images/image.png)
+
+#### Danh sách bài viết
+
+![Danh sách](static/images/image-1.png)
+
+#### Chi tiết bài viết với bình luận
+
+![Chi tiết 1](static/images/image-2.png)
+
+![Chi tiết 2](static/images/image-3.png)
