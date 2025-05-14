@@ -205,38 +205,51 @@ Detail' }}{% endblock %} {% block content %}
     </div>
   </div>
 
-  <!-- Comments Section (Tạm thời để trống hoặc thông báo) -->
+  <!-- Comments Section (Tree View) -->
   <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in">
     <h3 class="text-2xl font-bold text-blue-800 mb-6 flex items-center">
-      <i class="far fa-comments mr-2"></i> Comments ({{
-      interaction_data.total_comments }})
+      <i class="far fa-comments mr-2"></i> Comments ({{ comment_pagination.total
+      }})
     </h3>
-    {% if comments %}
+    {% if root_comments %}
     <div class="space-y-6">
-      {% for comment in comments %}
+      {% for comment in root_comments %}
       <div class="comment-item border-b border-gray-200 pb-4 animate-fade-in">
         <p>
-          <strong class="text-blue-700"
-            >{{ comment.user_name or 'Anonymous' }}</strong
-          >
+          <strong class="text-blue-700">{{ comment.user_name or 'Anonymous' }}</strong>
           <span class="text-xs text-gray-500 ml-2">
-            {{ comment.comment_datetime.strftime('%b %d, %Y %I:%M %p') if
-            comment.comment_datetime else comment.comment_date_str }}
+            {{ comment.comment_datetime.strftime('%b %d, %Y %I:%M %p') if comment.comment_datetime else comment.comment_date_str }}
           </span>
         </p>
         <p class="text-gray-700 mt-1">{{ comment.comment_text }}</p>
         <div class="text-xs text-gray-500 mt-2">
           <span>
             Likes:
-            <span class="font-semibold text-yellow-600">
-              {{ comment.likes_count or 0 }}
-            </span>
+            <span class="font-semibold text-yellow-600">{{ comment.likes_count or 0 }}</span>
           </span>
         </div>
+        {% set replies = comment.replies.order_by('comment_datetime') %} {% if replies.count() > 0 %}
+        <button class="text-xs text-blue-600 mt-2 mb-1 px-2 py-1 rounded hover:bg-blue-50 transition" type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Xem {{ replies.count() }} trả lời</button>
+        <div class="ml-6 mt-3 border-l-2 border-blue-100 pl-4 hidden">
+          {% for reply in replies %}
+          <div class="reply-item mb-2">
+            <p>
+              <strong class="text-green-700">{{ reply.user_name or 'Anonymous' }}</strong>
+              <span class="text-xs text-gray-400 ml-2">
+                {{ reply.comment_datetime.strftime('%b %d, %Y %I:%M %p') if reply.comment_datetime else reply.comment_date_str }}
+              </span>
+            </p>
+            <p class="text-gray-600 mt-1">{{ reply.comment_text }}</p>
+            <div class="text-xs text-gray-400 mt-1">
+              Likes: <span class="font-semibold text-yellow-600">{{ reply.likes_count or 0 }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
-    <!-- Pagination cho Comments (Nếu có) -->
     {% if comment_pagination %}
     <nav class="flex justify-center mt-8">
       <ul class="inline-flex items-center -space-x-px">

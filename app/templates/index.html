@@ -18,6 +18,20 @@
         <form method="POST" action="{{ url_for('main.analyze_new_article') }}" class="flex flex-col sm:flex-row items-center gap-4">
             <input type="url" name="article_url" placeholder="Paste VnExpress article URL..."
                    class="flex-grow p-4 rounded-full text-gray-800 focus:ring-4 focus:ring-yellow-400 focus:outline-none shadow-lg transition-all duration-200" required>
+            <div class="flex flex-col items-start gap-2 bg-white bg-opacity-20 rounded-xl px-4 py-3 shadow-lg border border-yellow-200 animate-fade-in">
+                <label class="inline-flex items-center text-blue-900 font-semibold cursor-pointer select-none">
+                    <input type="checkbox" name="scrape_comments" id="scrape_comments_cb" class="form-checkbox h-5 w-5 text-yellow-400 rounded focus:ring-yellow-500 transition-all duration-150">
+                    <span class="ml-2 flex items-center">
+                        <i class="far fa-comments mr-1 text-yellow-400 animate-bounce"></i>
+                        Scrape bình luận
+                    </span>
+                </label>
+                <div id="max_comments_box" class="w-full mt-1 transition-all duration-200" style="display:none;">
+                    <label for="max_comments" class="text-sm text-blue-900 font-medium mb-1">Số bình luận tối đa</label>
+                    <input type="number" name="max_comments" id="max_comments" min="1" max="500" value="100" class="w-32 p-2 rounded text-gray-800 border border-gray-300 focus:ring-2 focus:ring-yellow-400" placeholder="Tối đa 500">
+                </div>
+                <span class="text-xs text-blue-100 mt-1">Tùy chọn này sẽ làm quá trình phân tích chậm hơn nếu bài viết có nhiều bình luận.</span>
+            </div>
             <button type="submit"
                     class="bg-yellow-400 hover:bg-yellow-500 text-blue-800 font-bold py-4 px-8 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105">
                 <i class="fas fa-search-plus mr-2"></i> Analyze Now
@@ -178,6 +192,20 @@
     });
     // ĐÃ BỎ: Không show overlay khi chỉ paste URL nữa
     // Nếu muốn tự động submit sau khi paste, hãy thêm logic ở đây
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+      var cb = document.getElementById("scrape_comments_cb");
+      var box = document.getElementById("max_comments_box");
+      if(cb && box) {
+          cb.addEventListener("change", function() {
+              if(cb.checked) {
+                  box.style.display = "block";
+              } else {
+                  box.style.display = "none";
+              }
+          });
+      }
   });
 </script>
 

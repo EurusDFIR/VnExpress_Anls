@@ -14,29 +14,48 @@ def save_html_to_file(html, filename="debug_comment_playwright.html"):
     with open(filename, "w", encoding="utf-8") as f:
         f.write(html)
 
-async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False):
+async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False, max_comments=100):
+    import time
+    t_start = time.time()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        # Chặn tải ảnh, font, css để tăng tốc (chỉ cho khối bình luận, không ảnh bài báo)
+        page = await browser.new_page(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 800}
+        )
+        # Chặn thêm các request JS động, analytics, ads để tăng tốc
         async def block_resource(route):
-            if route.request.resource_type in ["image", "stylesheet", "font"]:
+            url = route.request.url
+            if route.request.resource_type in ["image", "stylesheet", "font", "media"] or any(x in url for x in ["googletagmanager", "google-analytics", "doubleclick", "scorecardresearch", "cdn.ampproject.org", "quangcao", "vads"]):
                 await route.abort()
             else:
                 await route.continue_()
         await page.route("**/*", block_resource)
-        await page.goto(article_url, timeout=60000)
-        # Chờ khối bình luận xuất hiện
-        await page.wait_for_selector('#box_comment_vne', timeout=30000)
+        # Tăng timeout tải trang lên 40s, giữ wait_for_selector ở 15s
+        # Sử dụng wait_until="domcontentloaded" để tránh bị kẹt khi trang tải chậm tài nguyên ngoài
+        await page.goto(article_url, timeout=40000, wait_until="domcontentloaded")
+        await page.wait_for_selector('#box_comment_vne', timeout=15000)
         print("Playwright: Trang đã tải, khối comment chính đã xuất hiện.")
-        # Click 'Xem thêm ý kiến' nhiều lần (giới hạn để lấy tối đa ~100 bình luận)
-        max_comments = 100
+        t_after_load = time.time()
+        print(f"[DEBUG] Thời gian tải trang và khối comment: {t_after_load-t_start:.2f}s")
+        # Click 'Xem thêm ý kiến' nhiều lần (giới hạn để lấy tối đa ~max_comments bình luận)
         total_comments_loaded = 0
         for i in range(max_load_more_clicks):
             try:
+                # Ẩn các overlay phổ biến có thể che nút (sticky header, player, popup)
+                await page.evaluate('''
+                    let sticky = document.querySelector('.sticky');
+                    if (sticky) sticky.style.display = 'none';
+                    let player = document.querySelector('.section-player-pin');
+                    if (player) player.style.display = 'none';
+                    let popup = document.querySelector('.vne-popup');
+                    if (popup) popup.style.display = 'none';
+                ''')
+                # Cuộn xuống cuối trang để hiện nút 'Xem thêm ý kiến' nếu bị ẩn
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                await page.wait_for_timeout(400)
                 btn = await page.query_selector('#show_more_coment')
                 if btn:
-                    # Đếm số bình luận hiện tại
                     comment_items = await page.query_selector_all('#list_comment > div.comment_item')
                     total_comments_loaded = len(comment_items)
                     print(f"Playwright: Đã tải {total_comments_loaded} bình luận.")
@@ -44,7 +63,18 @@ async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=
                         print(f"Playwright: Đã đạt giới hạn {max_comments} bình luận.")
                         break
                     print(f"Playwright: Click 'Xem thêm ý kiến' lần {i+1}/{max_load_more_clicks}")
-                    await btn.click()
+                    # Scroll nút vào giữa màn hình trước khi click
+                    await btn.evaluate("el => el.scrollIntoView({block: 'center'})")
+                    await page.wait_for_timeout(200)
+                    try:
+                        await btn.click(timeout=2000)
+                    except Exception as e:
+                        print(f"Playwright: Click thường lỗi, thử click bằng JS: {e}")
+                        try:
+                            await btn.evaluate("el => el.click()")
+                        except Exception as e2:
+                            print(f"Playwright: Click JS cũng lỗi: {e2}")
+                            break
                     await page.wait_for_timeout(600)
                 else:
                     print("Playwright: Không tìm thấy nút 'Xem thêm ý kiến'.")
@@ -52,9 +82,11 @@ async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=
             except Exception as e:
                 print(f"Playwright: Lỗi khi click 'Xem thêm ý kiến': {e}")
                 break
-        print("Playwright: Đã click xong 'Xem thêm ý kiến'.")
-        # Tối ưu: Click tất cả nút 'Xem trả lời' cho mỗi bình luận gốc
-        for reply_round in range(max_reply_clicks_per_comment):
+        t_after_loadmore = time.time()
+        print(f"[DEBUG] Thời gian click 'Xem thêm ý kiến': {t_after_loadmore-t_after_load:.2f}s")
+        # Lặp nhiều vòng cho đến khi không còn nút 'Xem trả lời' nào xuất hiện nữa (tối đa 10 vòng)
+        max_reply_rounds = 10
+        for reply_round in range(max_reply_rounds):
             reply_buttons = await page.query_selector_all('p.count-reply a.view_all_reply')
             if not reply_buttons:
                 print(f"Playwright: Không còn nút 'Xem trả lời' ở vòng {reply_round+1}.")
@@ -63,10 +95,11 @@ async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=
             for btn in reply_buttons:
                 try:
                     await btn.click()
-                    await page.wait_for_timeout(1200)
+                    await page.wait_for_timeout(1000)
                 except Exception as e:
                     print(f"Playwright: Lỗi khi click 'Xem trả lời': {e}")
-        print("Playwright: Đã click xong tất cả nút 'Xem trả lời'.")
+        t_after_reply = time.time()
+        print(f"[DEBUG] Thời gian click tất cả 'Xem trả lời': {t_after_reply-t_after_loadmore:.2f}s")
         # Lấy HTML của khối bình luận
         try:
             comment_html = await page.inner_html('#box_comment')
@@ -77,16 +110,19 @@ async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=
             print(f"Playwright: Lỗi khi lấy HTML khối bình luận: {e}")
             comment_html = None
         await browser.close()
+        t_end = time.time()
+        print(f"[DEBUG] Tổng thời gian Playwright scrape bình luận: {t_end-t_start:.2f}s")
         return comment_html
 
-def fetch_comments_html_sync(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False):
+def fetch_comments_html_sync(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False, max_comments=100):
     loop = get_event_loop()
     return loop.run_until_complete(
         fetch_comments_html_with_playwright(
             article_url,
             max_load_more_clicks=max_load_more_clicks,
             max_reply_clicks_per_comment=max_reply_clicks_per_comment,
-            debug_save=debug_save
+            debug_save=debug_save,
+            max_comments=max_comments
         )
     )
 

@@ -56,9 +56,10 @@ def parse_datetime_from_str(date_str):
             print(f"Không thể parse chuỗi ngày: {date_str}")
             return None
 
-def scrape_article_details_and_save(article_url, db_session):
+def scrape_article_details_and_save(article_url, db_session, scrape_comments=False, max_comments=100):
     """
     Scrape chi tiết một bài viết và lưu vào database.
+    Nếu scrape_comments=True thì scrape cả bình luận (tối đa max_comments).
     db_session là session của SQLAlchemy.
     """
     try:
@@ -89,11 +90,27 @@ def scrape_article_details_and_save(article_url, db_session):
             paragraphs = content_container.find_all('p', class_=lambda x: x != 'description' if x else True)
             content_parts = []
             for p_tag in paragraphs:
-                for unwanted in p_tag.find_all(['figure', 'table', 'div', 'em', 'button', 'picture']): #Thêm các thẻ cần loại
+                for unwanted in p_tag.find_all(['figure', 'table', 'div', 'em', 'button', 'picture']):
                     unwanted.decompose()
                 text = p_tag.get_text(separator='\n', strip=True)
                 if text:
                     content_parts.append(text)
+            # Loại bỏ các đoạn <p> cuối không mong muốn (tác giả, nguồn, chú thích, rỗng)
+            while content_parts:
+                last = content_parts[-1].strip()
+                # Nếu là tên tác giả (ngắn, không số, không nhiều ký tự đặc biệt)
+                if (len(last) < 50 and not any(char.isdigit() for char in last) and not any(x in last for x in [":", "(", ")", ".com", "http"])):
+                    content_parts.pop()
+                    continue
+                # Nếu là chú thích nguồn (theo ...)
+                if last.lower().startswith('(theo') or last.lower().startswith('theo '):
+                    content_parts.pop()
+                    continue
+                # Nếu là <p> rỗng hoặc chỉ chứa dấu chấm, xuống dòng
+                if last.strip() in {"", ".", "-", "–"}:
+                    content_parts.pop()
+                    continue
+                break
             content = "\n\n".join(content_parts)
 
         date_str = None
@@ -153,6 +170,11 @@ def scrape_article_details_and_save(article_url, db_session):
         db_session.add(new_article)
         db_session.commit()
         print(f"Đã lưu bài viết: {title[:50]}...")
+        # Nếu người dùng chọn scrape bình luận thì mới scrape
+        if scrape_comments:
+            # Gọi hàm scrape_and_save_comments với số lượng bình luận tối đa
+            num_comments = scrape_and_save_comments(new_article, db_session, max_comments=max_comments)
+            print(f"Đã scrape {num_comments} bình luận cho bài viết.")
         return new_article
 
     except requests.exceptions.RequestException as e:
@@ -258,9 +280,9 @@ try:
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
-def fetch_comments_html(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False):
+def fetch_comments_html(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False, max_comments=100):
     if PLAYWRIGHT_AVAILABLE:
-        return fetch_comments_html_sync(article_url, max_load_more_clicks, max_reply_clicks_per_comment, debug_save)
+        return fetch_comments_html_sync(article_url, max_load_more_clicks, max_reply_clicks_per_comment, debug_save, max_comments)
     else:
         return fetch_raw_comments_html_with_selenium(article_url, max_load_more_clicks, max_reply_clicks_per_comment)
 
@@ -427,7 +449,11 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
                 raw_data['comment_text'] = ""
 
             likes_tag = comment_element_soup.select_one('div.reactions-total a.number')
-            raw_data['likes_count'] = int(likes_tag.get_text(strip=True)) if likes_tag else 0
+            likes_text = likes_tag.get_text(strip=True) if likes_tag else ''
+            try:
+                raw_data['likes_count'] = int(likes_text)
+            except (ValueError, TypeError):
+                raw_data['likes_count'] = 0
             
             time_tag = comment_element_soup.select_one('span.time-com')
             raw_data['comment_date_str'] = time_tag.get_text(strip=True) if time_tag else None
@@ -440,13 +466,25 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
             # sub_comment_div là thẻ div.sub_comment ngay sau div.content-comment của bình luận hiện tại
             # Tuy nhiên, dựa trên HTML bạn gửi, reply nằm trong div.sub_comment là sibling của comment_item cha
             
-            # Cách tiếp cận: tìm div.sub_comment ngay sau comment_item hiện tại
+            # 1. Cách cũ: tìm div.sub_comment ngay sau comment_item hiện tại
             sub_comment_div = comment_element_soup.find_next_sibling('div', class_='sub_comment')
             if sub_comment_div:
                 reply_elements = sub_comment_div.find_all('div', class_='comment_item', recursive=False) # Chỉ lấy reply trực tiếp
                 for reply_el in reply_elements:
                     process_comment_element(reply_el, current_parent_api_id_on_site=raw_data['comment_api_id'])
 
+            # 2. Cách mới: tìm các div.sub_comment_item.comment_item.width_common là sibling ngay sau comment_item hiện tại
+            next_sibling = comment_element_soup.find_next_sibling()
+            while next_sibling:
+                if (
+                    next_sibling.name == 'div' and
+                    'sub_comment_item' in next_sibling.get('class', []) and
+                    'comment_item' in next_sibling.get('class', [])
+                ):
+                    process_comment_element(next_sibling, current_parent_api_id_on_site=raw_data['comment_api_id'])
+                    next_sibling = next_sibling.find_next_sibling()
+                else:
+                    break
         except Exception as e:
             print(f"Lỗi khi parse một comment element: {e}")
 
@@ -521,12 +559,12 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
 
 
 # Sửa đổi hàm `scrape_and_save_comments` để gọi các hàm Selenium và parse mới
-def scrape_and_save_comments(article_db_object, db_session):
+def scrape_and_save_comments(article_db_object, db_session, max_comments=100):
     if not article_db_object or not article_db_object.url:
         print("Đối tượng bài viết không hợp lệ cho scrape comments.")
         return 0
     # 1. Dùng Playwright (hoặc Selenium fallback) để lấy HTML của khối bình luận đã tải đầy đủ
-    comment_html_content = fetch_comments_html(article_db_object.url)
+    comment_html_content = fetch_comments_html(article_db_object.url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False, max_comments=max_comments)
     if not comment_html_content:
         print(f"Không lấy được HTML bình luận cho {article_db_object.url}")
         return 0

@@ -1,5 +1,5 @@
 # app/routes.py
-from flask import render_template, request, redirect, url_for, flash, abort
+from flask import render_template, request, redirect, url_for, flash, abort, jsonify
 from app import db
 from app.models import Article
 from scraper.vnexpress_scraper import scrape_article_details_and_save, get_article_urls_from_category_page 
@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Blueprint
 import os
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -80,27 +81,32 @@ def article_detail(article_id):
     article = db.session.get(Article, article_id)
     if not article:
         abort(404)
-    # Sử dụng số lượng bình luận thực tế trong DB
     real_comment_count = article.comments.count()
-    # Đồng bộ lại trường total_comment_count nếu bị lệch
     if article.total_comment_count != real_comment_count:
         article.total_comment_count = real_comment_count
         db.session.commit()
-    mock_sentiment_data = {"positive": 0, "negative": 0, "neutral": 0, "total_comments": real_comment_count}
-    mock_discussion_topics = []
-    mock_interaction_data = {
-        "total_comments": real_comment_count,
-        "original_comments": 0, "replies": 0, "active_threads": 0,
-        "top_users": [], "most_liked_comment": None
-    }
-    # --- Fetch comments for this article, paginated ---
+    # Lấy các comment gốc (parent_comment_id=None)
+    root_comments_query = article.comments.filter_by(parent_comment_id=None).order_by(Article.comments.property.mapper.class_.comment_datetime.desc().nullslast(), Article.comments.property.mapper.class_.id.desc())
     page = request.args.get('page', 1, type=int)
     per_page = 10
-    comments_query = article.comments.order_by(Article.comments.property.mapper.class_.comment_datetime.desc().nullslast(), Article.comments.property.mapper.class_.id.desc())
-    comments_pagination = comments_query.paginate(page=page, per_page=per_page, error_out=False)
-    comments_on_page = comments_pagination.items
+    root_comments_pagination = root_comments_query.paginate(page=page, per_page=per_page, error_out=False)
+    root_comments_on_page = root_comments_pagination.items
+    # Tạo mock dữ liệu nếu không có bình luận để tránh lỗi template
+    if 'root_comments_on_page' in locals() and root_comments_on_page:
+        total_comments = sum([1 + c.replies.count() for c in root_comments_on_page])
+    else:
+        total_comments = 0
+    mock_sentiment_data = {"positive": 0, "negative": 0, "neutral": 0, "total_comments": total_comments}
+    mock_discussion_topics = []
+    mock_interaction_data = {
+        "total_comments": total_comments,
+        "original_comments": len(root_comments_on_page) if 'root_comments_on_page' in locals() else 0,
+        "replies": total_comments - (len(root_comments_on_page) if 'root_comments_on_page' in locals() else 0),
+        "active_threads": 0,
+        "top_users": [], "most_liked_comment": None
+    }
     return render_template('article_detail.html', title=article.title, article=article,
-                           comments=comments_on_page, comment_pagination=comments_pagination,
+                           root_comments=root_comments_on_page, comment_pagination=root_comments_pagination,
                            sentiment_data=mock_sentiment_data,
                            discussion_topics=mock_discussion_topics,
                            interaction_data=mock_interaction_data)
@@ -108,9 +114,13 @@ def article_detail(article_id):
 @main_bp.route('/analyze-new', methods=['POST'])
 def analyze_new_article():
     article_url = request.form.get('article_url')
-    if not article_url:
-        flash('Vui lòng nhập URL bài viết.', 'warning')
-        return redirect(url_for('main.index'))
+    scrape_comments = request.form.get('scrape_comments', 'off') == 'on'
+    try:
+        max_comments = int(request.form.get('max_comments', 100))
+        if max_comments < 1: max_comments = 1
+        if max_comments > 500: max_comments = 500
+    except Exception:
+        max_comments = 100
     parsed_url = urlparse(article_url)
     if not parsed_url.scheme or parsed_url.netloc != 'vnexpress.net' or not article_url.endswith('.html'):
         flash('URL không hợp lệ hoặc không phải từ VnExpress.', 'danger')
@@ -119,12 +129,15 @@ def analyze_new_article():
     if existing_article:
         flash('Bài viết này đã được phân tích. Đang chuyển đến trang chi tiết.', 'info')
         return redirect(url_for('main.article_detail', article_id=existing_article.id))
-    newly_scraped_article = scrape_article_details_and_save(article_url, db.session)
+ 
+    t0 = time.time()
+    newly_scraped_article = scrape_article_details_and_save(article_url, db.session, scrape_comments=scrape_comments, max_comments=max_comments)
+    t1 = time.time()
+    scrape_article_time = t1 - t0
     if newly_scraped_article and newly_scraped_article.id:
-        # Gọi scrape bình luận ngay sau khi scrape bài viết
-        from scraper.vnexpress_scraper import scrape_and_save_comments
-        num_comments = scrape_and_save_comments(newly_scraped_article, db.session)
-        flash(f'Đã phân tích thành công bài viết: {newly_scraped_article.title} (Bình luận: {num_comments})', 'success')
+        total_time = t1 - t0
+        flash(f'Đã phân tích thành công bài viết: {newly_scraped_article.title}', 'success')
+        flash(f'Thời gian scrape: {scrape_article_time:.2f}s', 'info')
         return redirect(url_for('main.article_detail', article_id=newly_scraped_article.id))
     else:
         flash('Không thể phân tích bài viết. Vui lòng thử lại hoặc kiểm tra URL.', 'danger')
@@ -161,4 +174,9 @@ def search_suggest():
                     suggestions.append({'type': 'author', 'value': art.author})
                     seen.add(art.author)
     return {"suggestions": suggestions[:15], "keywords": keywords}
+
+@main_bp.route('/latest-articles')
+def latest_articles():
+    articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
+    return render_template('latest_articles.html', title='Bài viết mới nhất', articles=articles)
 

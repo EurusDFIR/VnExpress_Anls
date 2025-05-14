@@ -35,6 +35,25 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 2.1. Cài đặt Playwright và browser driver (bắt buộc để scrape bình luận động)
+
+```bash
+pip install playwright  # Đã có trong requirements.txt, nhưng nên chạy lại để chắc chắn
+python -m playwright install  # Cài Chromium/Firefox/Webkit driver cho Playwright
+```
+
+- **Yêu cầu Node.js:** Playwright cần Node.js để cài browser driver. Nếu chưa có, tải tại: https://nodejs.org/
+
+### 2.2. File .env mẫu
+
+Tạo file `.env` ở thư mục gốc với nội dung ví dụ:
+
+```
+DATABASE_URL=postgresql://username:password@localhost:5432/ten_database
+FLASK_APP=run.py
+FLASK_ENV=development
+```
+
 ### 3. Cấu hình kết nối database
 
 - Tạo file `.env` hoặc chỉnh sửa `config.py` để điền thông tin kết nối PostgreSQL:
@@ -82,6 +101,11 @@ python update_article_images.py
 
 ### 8. Lưu ý
 
-- Nếu scrape bình luận động, cần cài ChromeDriver phù hợp với Chrome (xem hướng dẫn trong `scraper/`)
-- Nếu gặp lỗi kết nối database, kiểm tra lại thông tin trong `.env` hoặc `config.py`
-- Có thể cần chỉnh sửa `requirements.txt` nếu môi trường đặc biệt
+- Nếu scrape bình luận động, cần cài Chrome/Chromium hoặc Firefox/Webkit (Playwright sẽ tự động cài khi chạy lệnh trên).
+- Nếu dùng Selenium fallback, ChromeDriver sẽ được tự động cài qua webdriver-manager.
+- Nếu gặp lỗi kết nối database, kiểm tra lại thông tin trong `.env` hoặc `config.py`.
+- **Sau khi pip install -r requirements.txt, luôn chạy:**
+  ```
+  python -m playwright install
+  ```
+- Có thể cần chỉnh sửa `requirements.txt` nếu môi trường đặc biệt.

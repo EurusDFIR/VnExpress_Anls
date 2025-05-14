@@ -1,0 +1,31 @@
+{% extends 'layouts/base.html' %} {% block title %}Bài viết mới nhất{% endblock
+%} {% block content %}
+<div class="container mx-auto py-8">
+  <h1 class="text-2xl font-bold mb-6">Bài viết mới nhất</h1>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for article in articles %}
+    <div class="bg-white rounded-lg shadow-md p-4 hover:shadow-xl transition">
+      <a
+        href="{{ url_for('main.article_detail', article_id=article.id) }}"
+        class="block"
+      >
+        <h2 class="text-lg font-semibold mb-2">{{ article.title }}</h2>
+        {% if article.image_url %}
+        <img
+          src="{{ article.image_url }}"
+          alt="Ảnh bài viết"
+          class="w-full h-40 object-cover rounded mb-2"
+        />
+        {% endif %}
+        <p class="text-gray-600 text-sm mb-1">
+          {{ article.category }} | {{
+          article.publish_datetime.strftime('%d/%m/%Y %H:%M') if
+          article.publish_datetime else '' }}
+        </p>
+        <p class="text-gray-800 text-sm">{{ article.author }}</p>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
