@@ -126,6 +126,3 @@ def fetch_comments_html_sync(article_url, max_load_more_clicks=10, max_reply_cli
         )
     )
 
-# Example usage (for testing):
-# html = fetch_comments_html_sync('https://vnexpress.net/...')
-# print(html)

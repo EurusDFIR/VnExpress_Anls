@@ -9,19 +9,9 @@ from flask import Blueprint
 import os
 from dotenv import load_dotenv
 import time
+from collections import Counter
 
 load_dotenv()
-
-try:
-    import google.generativeai as genai
-    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-    if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
-    else:
-        genai = None
-except ImportError:
-    genai = None
-    GEMINI_API_KEY = None
 
 main_bp = Blueprint('main', __name__)
 
@@ -85,29 +75,65 @@ def article_detail(article_id):
     if article.total_comment_count != real_comment_count:
         article.total_comment_count = real_comment_count
         db.session.commit()
-    # Lấy các comment gốc (parent_comment_id=None)
-    root_comments_query = article.comments.filter_by(parent_comment_id=None).order_by(Article.comments.property.mapper.class_.comment_datetime.desc().nullslast(), Article.comments.property.mapper.class_.id.desc())
+    all_comments = article.comments.order_by(
+        Article.comments.property.mapper.class_.comment_datetime.asc().nullslast(),
+        Article.comments.property.mapper.class_.id.asc()
+    ).all()
+    # Build a pure dict tree for template
+    comment_dict = {}
+    for c in all_comments:
+        comment_dict[c.id] = {
+            'id': c.id,
+            'user_name': c.user_name,
+            'comment_text': c.comment_text,
+            'comment_datetime': c.comment_datetime,
+            'comment_date_str': c.comment_date_str,
+            'likes_count': c.likes_count,
+            'children': [],
+            'sentiment_label': c.sentiment_label,
+            'sentiment_score_comment': c.sentiment_score_comment
+        }
+    tree = []
+    for c in all_comments:
+        node = comment_dict[c.id]
+        if c.parent_comment_id and c.parent_comment_id in comment_dict:
+            comment_dict[c.parent_comment_id]['children'].append(node)
+        else:
+            tree.append(node)
+    # PHÂN TRANG comment gốc (không phải reply)
     page = request.args.get('page', 1, type=int)
-    per_page = 10
-    root_comments_pagination = root_comments_query.paginate(page=page, per_page=per_page, error_out=False)
-    root_comments_on_page = root_comments_pagination.items
-    # Tạo mock dữ liệu nếu không có bình luận để tránh lỗi template
-    if 'root_comments_on_page' in locals() and root_comments_on_page:
-        total_comments = sum([1 + c.replies.count() for c in root_comments_on_page])
-    else:
-        total_comments = 0
-    mock_sentiment_data = {"positive": 0, "negative": 0, "neutral": 0, "total_comments": total_comments}
+    per_page = 10  # Số comment gốc mỗi trang
+    total_root_comments = len(tree)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_tree = tree[start:end]
+    total_pages = (total_root_comments + per_page - 1) // per_page
+    total_comments = len(all_comments)
+    # Sentiment statistics
+    sentiment_counter = Counter([c.sentiment_label for c in all_comments if c.sentiment_label])
+    sentiment_data = {
+        "positive": round(100 * sentiment_counter.get("Positive", 0) / total_comments, 1) if total_comments else 0,
+        "negative": round(100 * sentiment_counter.get("Negative", 0) / total_comments, 1) if total_comments else 0,
+        "neutral": round(100 * sentiment_counter.get("Neutral", 0) / total_comments, 1) if total_comments else 0,
+        "total_comments": total_comments
+    }
     mock_discussion_topics = []
     mock_interaction_data = {
         "total_comments": total_comments,
-        "original_comments": len(root_comments_on_page) if 'root_comments_on_page' in locals() else 0,
-        "replies": total_comments - (len(root_comments_on_page) if 'root_comments_on_page' in locals() else 0),
+        "original_comments": len([c for c in all_comments if not c.parent_comment_id]),
+        "replies": len([c for c in all_comments if c.parent_comment_id]),
         "active_threads": 0,
         "top_users": [], "most_liked_comment": None
     }
     return render_template('article_detail.html', title=article.title, article=article,
-                           root_comments=root_comments_on_page, comment_pagination=root_comments_pagination,
-                           sentiment_data=mock_sentiment_data,
+                           comment_tree=paginated_tree,
+                           comment_pagination={
+                               'page': page,
+                               'per_page': per_page,
+                               'total_pages': total_pages,
+                               'total_root_comments': total_root_comments
+                           },
+                           sentiment_data=sentiment_data,
                            discussion_topics=mock_discussion_topics,
                            interaction_data=mock_interaction_data)
 

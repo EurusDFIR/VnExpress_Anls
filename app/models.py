@@ -43,7 +43,7 @@ class Comment(db.Model):
     sentiment_score_comment = db.Column(db.Float, nullable=True)
 
     # Mối quan hệ cho replies
-    replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), lazy='dynamic', cascade="all, delete-orphan")
+    replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), lazy='select', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Comment by {self.user_name}: {self.comment_text[:30]}...>'
@@ -66,4 +66,4 @@ class ArticleTopic(db.Model):
     __tablename__ = 'article_topics'
     article_id = db.Column(db.Integer, db.ForeignKey('articles.id'), primary_key=True)
     topic_id = db.Column(db.Integer, db.ForeignKey('topics.id'), primary_key=True)
-    relevance_score = db.Column(db.Float, nullable=True) # Điểm
+    relevance_score = db.Column(db.Float, nullable=True) # Điểm tương quan giữa bài viết và chủ đề

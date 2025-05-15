@@ -206,106 +206,124 @@ Detail' }}{% endblock %} {% block content %}
   </div>
 
   <!-- Comments Section (Tree View) -->
+  <div id="comments-section"></div>
   <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in">
     <h3 class="text-2xl font-bold text-blue-800 mb-6 flex items-center">
-      <i class="far fa-comments mr-2"></i> Comments ({{ comment_pagination.total
-      }})
+      <i class="far fa-comments mr-2"></i> Comments ({{ comment_tree|length }})
     </h3>
-    {% if root_comments %}
-    <div class="space-y-6">
-      {% for comment in root_comments %}
-      <div class="comment-item border-b border-gray-200 pb-4 animate-fade-in">
-        <p>
-          <strong class="text-blue-700">{{ comment.user_name or 'Anonymous' }}</strong>
-          <span class="text-xs text-gray-500 ml-2">
-            {{ comment.comment_datetime.strftime('%b %d, %Y %I:%M %p') if comment.comment_datetime else comment.comment_date_str }}
-          </span>
-        </p>
-        <p class="text-gray-700 mt-1">{{ comment.comment_text }}</p>
-        <div class="text-xs text-gray-500 mt-2">
-          <span>
-            Likes:
-            <span class="font-semibold text-yellow-600">{{ comment.likes_count or 0 }}</span>
-          </span>
-        </div>
-        {% set replies = comment.replies.order_by('comment_datetime') %} {% if replies.count() > 0 %}
-        <button class="text-xs text-blue-600 mt-2 mb-1 px-2 py-1 rounded hover:bg-blue-50 transition" type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Xem {{ replies.count() }} trả lời</button>
-        <div class="ml-6 mt-3 border-l-2 border-blue-100 pl-4 hidden">
-          {% for reply in replies %}
-          <div class="reply-item mb-2">
-            <p>
-              <strong class="text-green-700">{{ reply.user_name or 'Anonymous' }}</strong>
-              <span class="text-xs text-gray-400 ml-2">
-                {{ reply.comment_datetime.strftime('%b %d, %Y %I:%M %p') if reply.comment_datetime else reply.comment_date_str }}
-              </span>
-            </p>
-            <p class="text-gray-600 mt-1">{{ reply.comment_text }}</p>
-            <div class="text-xs text-gray-400 mt-1">
-              Likes: <span class="font-semibold text-yellow-600">{{ reply.likes_count or 0 }}</span>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
+    {% macro render_comment(comment, level=0) %}
+    <div
+      class="comment-item border-b border-gray-200 pb-4 pl-{{ level*6 }} animate-fade-in"
+    >
+      <p>
+        <strong class="text-blue-700"
+          >{{ comment.user_name or 'Anonymous' }}</strong
+        >
+        <span class="text-xs text-gray-500 ml-2">
+          {% if comment.comment_datetime %} {{
+          comment.comment_datetime.strftime('%b %d, %Y %I:%M %p') }} {% else %}
+          {{ comment.comment_date_str }} {% endif %}
+        </span>
+      </p>
+      <p class="text-gray-700 mt-1">{{ comment.comment_text }}</p>
+      {% if comment.sentiment_label %}
+      <div class="flex items-center mt-1">
+        {% if comment.sentiment_label == 'Positive' %}
+        <span
+          class="inline-flex items-center text-green-600 text-xs font-semibold mr-2"
+        >
+          <i class="far fa-smile mr-1"></i> Tích cực ({{ '%.2f' %
+          (comment.sentiment_score_comment or 0) }})
+        </span>
+        {% elif comment.sentiment_label == 'Negative' %}
+        <span
+          class="inline-flex items-center text-red-600 text-xs font-semibold mr-2"
+        >
+          <i class="far fa-frown mr-1"></i> Tiêu cực ({{ '%.2f' %
+          (comment.sentiment_score_comment or 0) }})
+        </span>
+        {% else %}
+        <span
+          class="inline-flex items-center text-yellow-600 text-xs font-semibold mr-2"
+        >
+          <i class="far fa-meh mr-1"></i> Trung lập ({{ '%.2f' %
+          (comment.sentiment_score_comment or 0) }})
+        </span>
         {% endif %}
       </div>
-      {% endfor %}
+      {% endif %}
+      <div class="text-xs text-gray-500 mt-2">
+        <span
+          >Likes:
+          <span class="font-semibold text-yellow-600"
+            >{{ comment.likes_count or 0 }}</span
+          ></span
+        >
+      </div>
+      {% if comment.children and comment.children|length > 0 %}
+      <button
+        class="text-xs text-blue-600 mt-2 mb-1 px-2 py-1 rounded hover:bg-blue-50 transition"
+        type="button"
+        onclick="this.nextElementSibling.classList.toggle('hidden')"
+      >
+        Xem {{ comment.children|length }} trả lời
+      </button>
+      <div class="ml-6 mt-3 border-l-2 border-blue-100 pl-4 hidden">
+        {% for child in comment.children %} {{ render_comment(child, level+1) }}
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
-    {% if comment_pagination %}
-    <nav class="flex justify-center mt-8">
-      <ul class="inline-flex items-center -space-x-px">
-        <li>
-          <a
-            href="{{ url_for('main.article_detail', article_id=article.id, page=comment_pagination.prev_num) if comment_pagination.has_prev else '#' }}"
-            class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700 {% if not comment_pagination.has_prev %} opacity-50 cursor-not-allowed {% endif %} transition-all duration-150"
-          >
-            Previous
-          </a>
-        </li>
-        {% for page_num in comment_pagination.iter_pages(left_edge=1,
-        right_edge=1, left_current=1, right_current=2) %} {% if page_num %} {%
-        if comment_pagination.page == page_num %}
-        <li>
-          <a
-            href="#"
-            aria-current="page"
-            class="z-10 py-2 px-3 leading-tight text-blue-600 bg-blue-50 border border-blue-300 hover:bg-blue-100 hover:text-blue-700 transition-all duration-150"
-          >
-            {{ page_num }}
-          </a>
-        </li>
+    {% endmacro %}
+    <div class="space-y-6">
+      {% for comment in comment_tree %} {{ render_comment(comment) }} {% endfor
+      %}
+    </div>
+    <!-- PHÂN TRANG COMMENT GỐC -->
+    {% if comment_pagination and comment_pagination.total_pages > 1 %}
+    <div class="flex justify-center mt-8" id="comment-pagination">
+      <nav class="inline-flex rounded-md shadow-sm" aria-label="Pagination">
+        {% if comment_pagination.page > 1 %}
+        <a
+          href="?page={{ comment_pagination.page - 1 }}#comments-section"
+          class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 rounded-l-md"
+          >&laquo; Trước</a
+        >
         {% else %}
-        <li>
-          <a
-            href="{{ url_for('main.article_detail', article_id=article.id, page=page_num) }}"
-            class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150"
-          >
-            {{ page_num }}
-          </a>
-        </li>
-        {% endif %} {% else %}
-        <li class="disabled">
-          <span class="py-2 px-3 leading-tight text-gray-400">…</span>
-        </li>
-        {% endif %} {% endfor %}
-        <li>
-          <a
-            href="{{ url_for('main.article_detail', article_id=article.id, page=comment_pagination.next_num) if comment_pagination.has_next else '#' }}"
-            class="py-2 px-3 leading-tight text-gray-500 bg-white rounded-r-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700 {% if not comment_pagination.has_next %} opacity-50 cursor-not-allowed {% endif %} transition-all duration-150"
-          >
-            Next
-          </a>
-        </li>
-      </ul>
-    </nav>
-    {% endif %} {% else %}
-    <p class="text-gray-500">
-      No comments to display for this article yet, or comment scraping is
-      pending.
-    </p>
+        <span
+          class="px-3 py-1 border border-gray-200 bg-gray-100 text-gray-400 rounded-l-md"
+          >&laquo; Trước</span
+        >
+        {% endif %} {% for p in range(1, comment_pagination.total_pages + 1) %}
+        {% if p == comment_pagination.page %}
+        <span
+          class="px-3 py-1 border border-blue-400 bg-blue-100 text-blue-700 font-bold"
+          >{{ p }}</span
+        >
+        {% else %}
+        <a
+          href="?page={{ p }}#comments-section"
+          class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50"
+          >{{ p }}</a
+        >
+        {% endif %} {% endfor %} {% if comment_pagination.page <
+        comment_pagination.total_pages %}
+        <a
+          href="?page={{ comment_pagination.page + 1 }}#comments-section"
+          class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 rounded-r-md"
+          >Sau &raquo;</a
+        >
+        {% else %}
+        <span
+          class="px-3 py-1 border border-gray-200 bg-gray-100 text-gray-400 rounded-r-md"
+          >Sau &raquo;</span
+        >
+        {% endif %}
+      </nav>
+    </div>
     {% endif %}
   </div>
 </div>
-
 <!-- Loading Spinner Overlay -->
 <div
   id="loading-overlay"
@@ -349,6 +367,18 @@ Detail' }}{% endblock %} {% block content %}
     });
   });
   // Nếu muốn show overlay khi paste URL, có thể thêm trigger ở đây
+
+  // Scroll đến vùng comment khi có anchor #comments-section
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.location.hash === "#comments-section") {
+      var commentSection = document.querySelector(
+        ".bg-white.p-6.rounded-xl.shadow-lg.animate-fade-in"
+      );
+      if (commentSection) {
+        commentSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  });
 </script>
 
 <style>

@@ -14,7 +14,7 @@
 #### a. Clone project về máy
 
 ```bash
-# Clone về thư mục mong muốn
+# Clone về thư mục của bạn
 https://github.com/your-username/VnExpress_Anls.git
 cd VnExpress_Anls
 ```
