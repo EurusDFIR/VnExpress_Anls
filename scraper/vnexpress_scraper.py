@@ -125,7 +125,7 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
         db_session.add(new_article)
         db_session.flush()
         if scrape_comments:
-            num_comments = scrape_and_save_comments(new_article, db_session, max_comments=max_comments)
+            num_comments = scrape_and_save_comments(new_article, db_session)
             if num_comments > 0:
                 db_session.commit()
                 print(f"Đã lưu bài viết: {title[:50]}... và {num_comments} bình luận.")
@@ -187,8 +187,8 @@ try:
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
-def fetch_comments_html(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False, max_comments=100):
-    return fetch_comments_html_sync(article_url, max_load_more_clicks, max_reply_clicks_per_comment, debug_save, max_comments)
+def fetch_comments_html(article_url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False):
+    return fetch_comments_html_sync(article_url, max_load_more_clicks, max_reply_clicks_per_comment, debug_save)
 
 def parse_comments_from_html(comment_section_html, article_db_id, db_session):
     if not comment_section_html:
@@ -327,22 +327,96 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
         return 0
     return saved_count
 
-def scrape_and_save_comments(article_db_object, db_session, max_comments=100):
+
+def scrape_and_save_comments(article_db_object, db_session):
     if not article_db_object or not article_db_object.url:
         print("Đối tượng bài viết không hợp lệ cho scrape comments.")
         return 0
-    comment_html_content = fetch_comments_html(article_db_object.url, max_load_more_clicks=10, max_reply_clicks_per_comment=3, debug_save=False, max_comments=max_comments)
+    comment_html_content = fetch_comments_html(
+        article_db_object.url,
+        max_load_more_clicks=20,  # tăng số lần click để lấy tối đa
+        max_reply_clicks_per_comment=5,
+        debug_save=False
+    )
     if not comment_html_content:
         print(f"Không lấy được HTML bình luận cho {article_db_object.url}")
         return 0
-    num_saved = parse_comments_from_html(comment_html_content, article_db_object.id, db_session)
-    if num_saved > 0 or article_db_object.total_comment_count is None:
-        article_db_object.total_comment_count = (article_db_object.total_comment_count or 0) + num_saved
+
+    soup = BeautifulSoup(comment_html_content, 'html.parser')
+    comment_elements = soup.select('#list_comment > div.comment_item')
+    if not comment_elements:
+        return 0
+
+    # Tạo map để tra cứu comment đã có trong DB, giảm truy vấn lặp lại
+    existing_comments = db_session.query(Comment.comment_api_id).filter_by(article_id=article_db_object.id).all()
+    existing_api_ids = set(ec[0] for ec in existing_comments)
+
+    new_comments = []
+    def process_comment_element(el, parent_api_id=None):
+        try:
+            link_reply = el.find('a', class_='link_reply')
+            comment_api_id = None
+            if link_reply and link_reply.has_attr('rel'):
+                rel_val = link_reply['rel']
+                comment_api_id = rel_val[0] if isinstance(rel_val, list) else rel_val
+            if not comment_api_id or comment_api_id in existing_api_ids:
+                return
+            user_name = el.select_one('a.nickname')
+            user_name = user_name.get_text(strip=True) if user_name else "Ẩn danh"
+            full_content_tag = el.select_one('p.full_content')
+            if full_content_tag:
+                name_span = full_content_tag.find('span', class_='txt-name')
+                if name_span: name_span.decompose()
+                comment_text = full_content_tag.get_text(strip=True)
+            else:
+                comment_text = ""
+            likes_tag = el.select_one('div.reactions-total a.number') or el.select_one('span.total_like')
+            try:
+                likes_count = int(likes_tag.get_text(strip=True)) if likes_tag else 0
+            except Exception:
+                likes_count = 0
+            time_tag = el.select_one('span.time-com')
+            comment_date_str = time_tag.get_text(strip=True) if time_tag else None
+            comment_dt = parse_datetime_from_str(comment_date_str)
+            new_comments.append(Comment(
+                article_id=article_db_object.id,
+                comment_api_id=comment_api_id,
+                user_name=user_name,
+                comment_text=comment_text,
+                comment_date_str=comment_date_str,
+                comment_datetime=comment_dt,
+                likes_count=likes_count,
+                parent_comment_id=None  # sẽ cập nhật sau nếu cần
+            ))
+            existing_api_ids.add(comment_api_id)
+            # Xử lý reply (nếu có)
+            sub_comment_divs = el.find_all('div', class_='sub_comment', recursive=False)
+            for sub_div in sub_comment_divs:
+                reply_elements = sub_div.find_all(['div'], class_=['comment_item', 'sub_comment_item'], recursive=False)
+                for reply_el in reply_elements:
+                    process_comment_element(reply_el, parent_api_id=comment_api_id)
+        except Exception as e:
+            pass  # Bỏ qua lỗi nhỏ để không chậm
+
+    for el in comment_elements:
+        process_comment_element(el)
+
+    if new_comments:
+        db_session.bulk_save_objects(new_comments)
+        try:
+            db_session.commit()
+            print(f"Đã lưu/cập nhật {len(new_comments)} bình luận mới vào DB.")
+        except Exception as e_commit:
+            print(f"Lỗi khi commit comments: {e_commit}")
+            db_session.rollback()
+            return 0
+        article_db_object.total_comment_count = (article_db_object.total_comment_count or 0) + len(new_comments)
         try:
             db_session.commit()
         except Exception as e:
             db_session.rollback()
             print(f"Lỗi khi cập nhật total_comment_count: {e}")
-    return num_saved
+        return len(new_comments)
+    return 0
 
 
