@@ -266,7 +266,7 @@ def index():
     elif sort_by_filter == 'oldest_first':
         query = query.order_by(Article.publish_datetime.asc().nullsfirst())
     elif sort_by_filter == 'most_comments':
-        query = query.order_by(Article.total_comments_count.desc().nullslast())
+        query = query.order_by(Article.total_comment_count.desc().nullslast())
     # Lấy danh sách chuyên mục từ bảng Category, không join với Article để tránh cartesian product
     categories_query = db.session.query(Category).filter(Category.is_active == True).order_by(Category.name).all()
     categories = ["All Categories"] + [cat.name for cat in categories_query]
