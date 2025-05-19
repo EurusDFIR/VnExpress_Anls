@@ -427,3 +427,50 @@ def latest_articles():
     articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
     return render_template('latest_articles.html', title='Bài viết mới nhất', articles=articles)
 
+@main_bp.route('/about')
+def about():
+    technologies = [
+        "Python", "Flask", "SQLAlchemy", "PostgreSQL", "Tailwind CSS", "BeautifulSoup", "Playwright"
+    ]
+    page_team_info = {
+        "lecturer": "TS. Nguyễn Thế Bảo",
+        "members": [
+             {
+            "name": "Lê Văn Hoàng", # Thay tên
+            "mssv": "2224802010279", # Thay MSSV
+            "avatar": "images/avatars/1_hoang.jpg", # Đường dẫn đến ảnh trong static/images/avatars/
+            "role": "Project Lead & Backend Developer", # Vai trò
+            "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.", # Mô tả ngắn
+            "google": "2224802010279@student.tdmu.edu.vn", # Link Goole
+            "github": "https://github.com/EurusDFIR" # Link GitHub 
+        },
+        {
+            "name": "Lê Nguyễn Hoàng", 
+            "mssv": "222480201081", 
+            "avatar": "images/avatars/2_nH.png", 
+            "role": "Backend Developer", 
+            "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.",
+            "google": "2224802010814@student.tdmu.edu.vn", 
+            "github": "https://github.com/CooloBi21" 
+        },
+        {
+            "name": "Nguyễn Tuấn Anh", 
+            "mssv": "2224802010328", 
+            "avatar": "images/avatars/3_tA.png", 
+            "role": "Frontend Developer & UI/UX Designer",
+            "bio": "Yêu thích việc tạo ra những giao diện đẹp mắt và thân thiện với người dùng.",
+            "google": "2224802010328@student.tdmu.edu.vn", 
+            "github": "https://github.com/ALZPotato" 
+        },
+            # Thêm các thành viên khác nếu có
+        ]
+    }
+    project_description = "VnExpress Analyzer là dự án phân tích dữ liệu báo chí hiện đại."
+    return render_template(
+        'about.html',
+        title="Giới Thiệu",
+        technologies=technologies,
+        page_team_info=page_team_info,
+        project_description=project_description
+    )
+

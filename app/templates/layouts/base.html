@@ -62,12 +62,16 @@
             <i class="far fa-clock mr-2"></i>
             <span id="current-datetime"></span>
           </div>
-          <div class="hidden md:flex space-x-6 items-center">
-            <a href="{{ url_for('main.index') }}" class="hover:text-yellow-300"
-              >Home</a
-            >
-            {# <a href="#" class="hover:text-yellow-300">Explore Topics</a> #}
-            {# <a href="#" class="hover:text-yellow-300">Analyze New</a> #}
+          <div class="hidden md:flex space-x-8">
+            <a href="{{ url_for('main.index') }}" class="nav-link text-white hover:text-yellow-300">
+              <i class="fas fa-home mr-2"></i>Home
+            </a>
+            <a href="{{ url_for('main.scrape_center_page') }}" class="nav-link text-white hover:text-yellow-300">
+              <i class="fas fa-download mr-2"></i>Scrape Center
+            </a>
+            <a href="{{ url_for('main.about') }}" class="nav-link text-white hover:text-yellow-300">
+              <i class="fas fa-info-circle mr-2"></i>Giới Thiệu
+            </a>
           </div>
           <div class="w-full md:w-1/3 flex justify-end">
             <form
@@ -109,17 +113,18 @@
         </div>
       </nav>
       <!-- Mobile Menu (ẩn mặc định) -->
-      <div id="mobile-menu" class="md:hidden hidden bg-blue-600">
-        <a
-          href="{{ url_for('main.index') }}"
-          class="block py-2 px-4 text-sm hover:bg-blue-500"
-          >Home</a
-        >
-        {#
-        <a href="#" class="block py-2 px-4 text-sm hover:bg-blue-500"
-          >Explore Topics</a
-        >
-        #}
+      <div id="mobile-menu" class="md:hidden hidden bg-blue-800/90 backdrop-blur-sm">
+        <div class="container mx-auto px-6 py-3 space-y-2">
+          <a href="{{ url_for('main.index') }}" class="block py-2 px-4 text-sm hover:bg-blue-700 rounded-lg transition-colors">
+            <i class="fas fa-home mr-2"></i>Home
+          </a>
+          <a href="{{ url_for('main.scrape_center_page') }}" class="block py-2 px-4 text-sm hover:bg-blue-700 rounded-lg transition-colors">
+            <i class="fas fa-download mr-2"></i>Scrape Center
+          </a>
+          <a href="{{ url_for('main.about') }}" class="block py-2 px-4 text-sm hover:bg-blue-700 rounded-lg transition-colors">
+            <i class="fas fa-info-circle mr-2"></i>Giới Thiệu
+          </a>
+        </div>
       </div>
     </header>
 
