@@ -67,6 +67,29 @@ FLASK_ENV=development
 flask db upgrade
 ```
 
+### 4.1. Import database mẫu (nếu muốn có dữ liệu sẵn)
+
+- Đã có file `vnexpress_analyzer_db.sql` (hoặc `.backup`) trong repo hoặc được chia sẻ kèm.
+- Tạo database trống (nếu chưa có):
+
+  ```powershell
+  createdb -U postgres vnexpress_analyzer_db
+  ```
+
+- Import dữ liệu mẫu:
+
+  ```powershell
+  psql -U postgres -d vnexpress_analyzer_db -f vnexpress_analyzer_db.sql
+  # hoặc nếu dùng file .backup:
+  pg_restore -U postgres -d vnexpress_analyzer_db -v vnexpress_analyzer_db.backup
+  ```
+
+- Sau đó, cấu hình `.env` trỏ đúng database này và chạy app như bình thường.
+
+### 4.2. Nếu muốn tạo database/migration từ đầu (không dùng file mẫu)
+
+- Làm theo hướng dẫn cũ: chạy `flask db upgrade` để tạo schema mới.
+
 ### 5. Chạy ứng dụng Flask
 
 ```bash
