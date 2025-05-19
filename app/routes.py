@@ -31,7 +31,7 @@ TEAM_INFO_PAGE = {
             "role": "Backend Developer", 
             "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.",
             "google": "2224802010814@student.tdmu.edu.vn", 
-            "github": "https://github.com/nvhoang" 
+            "github": "https://github.com/CooloBi21" 
         },
         {
             "name": "Nguyễn Tuấn Anh", 
@@ -99,8 +99,7 @@ def index():
                            current_date_from=date_from_str,
                            current_date_to=date_to_str,
                            current_sort_by=sort_by_filter,
-                           current_year=datetime.utcnow().year,
-                           page_team_info=TEAM_INFO_PAGE #TuanAnh_update
+                           current_year=datetime.utcnow().year
                            )
 
 @main_bp.route('/article/<int:article_id>')
@@ -243,3 +242,31 @@ def latest_articles():
     articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
     return render_template('latest_articles.html', title='Bài viết mới nhất', articles=articles)
 
+#TuanAnh_update
+# === START: Route cho trang About ===
+@main_bp.route('/about')
+def about():
+    # Bạn có thể truyền thêm dữ liệu vào trang about nếu cần
+    # Ví dụ: Lấy lại thông tin TEAM_INFO_PAGE để hiển thị chi tiết hơn trên trang About
+    # Hoặc một mô tả dài hơn về dự án, công nghệ sử dụng, v.v.
+    about_project_description = """
+        VnExpress Analyzer là một dự án được xây dựng nhằm mục đích học tập và trình diễn khả năng
+        phân tích dữ liệu từ các bài báo trên VnExpress. Ứng dụng cho phép người dùng không chỉ xem
+        nội dung bài viết mà còn cung cấp các phân tích về cảm xúc (sentiment analysis) trong bình luận,
+        các chủ đề chính được thảo luận, và một số thống kê tương tác khác. Dự án sử dụng Python, Flask,
+        PostgreSQL, cùng với các thư viện xử lý ngôn ngữ tự nhiên và scraping dữ liệu.
+    """
+    technologies_used = [
+        "Python", "Flask", "SQLAlchemy", "PostgreSQL",
+        "Tailwind CSS", "JavaScript", "Font Awesome",
+        "NLTK (hoặc thư viện NLP khác)", "BeautifulSoup / Scrapy / Playwright (cho scraping)"
+    ]
+
+    return render_template('about.html',
+                           title='Giới Thiệu - VnExpress Analyzer',
+                           project_description=about_project_description,
+                           technologies=technologies_used,
+                           page_team_info=TEAM_INFO_PAGE, # Truyền thông tin đội ngũ vào trang about
+                           current_year=datetime.utcnow().year # Cần thiết nếu about.html không kế thừa base.html có sẵn current_year
+                          )
+# === END: Route cho trang About ===

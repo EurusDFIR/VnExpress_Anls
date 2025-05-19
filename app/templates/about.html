@@ -1,0 +1,211 @@
+{# app/templates/about.html #}
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ title or 'Giới Thiệu Dự Án' }}{% endblock %}
+
+{% block content %}
+<div class="overflow-x-hidden">
+
+    <!-- Section 1: Hero Banner cho trang About -->
+    <section class="relative bg-gradient-to-r from-blue-600 to-blue-400 text-white py-20 md:py-32 text-center"> {# <<< GIỐNG HỆT INDEX HERO SECTION #}
+        <div class="absolute inset-0 opacity-10 pattern-dots-lg pattern-blue-500 pattern-bg-transparent pointer-events-none"></div>
+        <div class="container mx-auto px-4 relative z-10">
+            <div data-aos="fade-down" data-aos-duration="1000">
+                <i class="fas fa-rocket fa-3x text-yellow-400 mb-6 animate-bounce"></i>
+                <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 tracking-tight drop-shadow-xl">
+                    Khám Phá VnExpress Analyzer
+                </h1>
+                <p class="text-xl md:text-2xl font-light max-w-3xl mx-auto mb-10 leading-relaxed text-gray-100"> {# Chữ phụ có thể là gray-100 cho dễ đọc hơn chút #}
+                    Đi sâu vào hành trình sáng tạo, công nghệ tiên tiến và đội ngũ tâm huyết đằng sau công cụ phân tích tin tức mạnh mẽ này.
+                </p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="300" data-aos-duration="1000">
+                <a href="{{ url_for('main.index') }}#latest-articles"
+                   class="bg-yellow-400 hover:bg-yellow-500 text-blue-800 font-bold py-4 px-10 rounded-full shadow-xl transition-all duration-300 transform hover:scale-105 text-lg">
+                    Xem Phân Tích Mới Nhất <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 2: Sứ Mệnh và Tầm Nhìn (Mô tả dự án) -->
+    <section class="py-16 md:py-24 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="max-w-5xl mx-auto space-y-16 md:space-y-20">
+
+                <!-- Mục 1: Sứ Mệnh Của Chúng Tôi (Đóng khung, nội dung căn giữa) -->
+                <div class="bg-slate-50 p-8 md:p-12 rounded-2xl shadow-xl border border-slate-200" data-aos="fade-up" data-aos-duration="800">
+                    <div class="flex flex-col items-center text-center"> {# Căn giữa tất cả nội dung bên trong #}
+                        <!-- Tiêu đề -->
+                        <div class="mb-6 md:mb-8">
+                            <h2 class="text-3xl lg:text-4xl font-bold text-gray-900 inline-block relative pb-2">
+                                Sứ Mệnh Của Chúng Tôi
+                            </h2>
+                        </div>
+                        <!-- Nội Dung -->
+                        <div class="w-full max-w-3xl"> {# Giới hạn chiều rộng nội dung để dễ đọc khi căn giữa #}
+                            <div class="prose prose-lg lg:prose-xl max-w-none text-gray-700 leading-relaxed text-justify space-y-4"> {# text-center cho prose #}
+                                {% if project_description %}
+                                    {{ project_description|safe if project_description.startswith('<') else project_description|nl2br }}
+                                    <p class="mt-4">Chúng tôi tin rằng việc hiểu sâu hơn về cách thông tin được truyền tải và đón nhận là vô cùng quan trọng trong thời đại số. VnExpress Analyzer ra đời với mong muốn cung cấp một công cụ mạnh mẽ, dễ sử dụng để mọi người có thể khám phá những tầng ý nghĩa ẩn sau mỗi dòng tin tức.</p>
+                                {% else %}
+                                    <p>Thông tin mô tả dự án đang được cập nhật. Chúng tôi tập trung vào việc xây dựng các công cụ phân tích dữ liệu thông minh và trực quan.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mục 2: Tầm Nhìn Tương Lai (Đóng khung, nội dung căn giữa) -->
+                <div class="bg-sky-50 p-8 md:p-12 rounded-2xl shadow-xl border border-sky-200" data-aos="fade-up" data-aos-duration="800" data-aos-delay="100">
+                    <div class="flex flex-col items-center text-center"> {# Căn giữa tất cả nội dung bên trong #}
+                        <!-- Tiêu đề -->
+                        <div class="mb-6 md:mb-8">
+                            <h2 class="text-3xl lg:text-4xl font-bold text-gray-900 inline-block relative pb-2">
+                                Tầm Nhìn Tương Lai
+                            </h2>
+                        </div>
+                        <!-- Nội Dung -->
+                        <div class="w-full max-w-3xl"> {# Giới hạn chiều rộng nội dung #}
+                            <div class="prose prose-lg lg:prose-xl max-w-none text-gray-700 leading-relaxed text-justify space-y-4"> {# text-center cho prose #}
+                            <p>Trong tương lai, chúng tôi hướng tới việc mở rộng khả năng phân tích, tích hợp thêm nhiều nguồn dữ liệu và áp dụng các mô hình học máy tiên tiến hơn để mang lại những insight ngày càng sâu sắc và đa chiều. Mục tiêu là biến VnExpress Analyzer thành một trợ thủ đắc lực cho nhà báo, nhà nghiên cứu, và bất kỳ ai quan tâm đến việc phân tích thông tin.</p>
+                            <p class="mt-4">Chúng tôi cũng mong muốn xây dựng một cộng đồng người dùng tích cực, cùng nhau chia sẻ kiến thức và cải tiến công cụ ngày một tốt hơn.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 3: Công Nghệ Nền Tảng -->
+    {% if technologies %}
+    <section class="py-16 md:py-24 bg-gradient-to-r from-blue-600 to-blue-400 text-white"> {# <<< ĐỔI NỀN Ở ĐÂY #}
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12 md:mb-16" data-aos="zoom-in" data-aos-duration="700">
+                <i class="fas fa-microchip fa-3x text-yellow-400 mb-4"></i>
+                <h2 class="text-4xl md:text-5xl font-extrabold mb-3 tracking-tight text-white">Công Nghệ Nền Tảng</h2>
+                <p class="text-lg md:text-xl text-gray-100 max-w-2xl mx-auto"> {# Chữ phụ có thể là gray-100 #}
+                    Sức mạnh của VnExpress Analyzer được xây dựng từ những công nghệ hiện đại và đáng tin cậy.
+                </p>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-8">
+                {% for tech in technologies %}
+                <div data-aos="fade-up" data-aos-duration="500" data-aos-delay="{{ loop.index0 * 100 }}">
+                    <div class="bg-white/15 backdrop-blur-sm p-6 rounded-xl shadow-lg text-center transform transition-all duration-300 hover:bg-white/25 hover:scale-105 hover:shadow-yellow-400/30">
+                        {# Nền card bán trong suốt trên nền xanh, hover có bóng vàng nhẹ #}
+                        {% if 'Python' in tech %}<i class="fab fa-python fa-3x mb-3 text-yellow-300"></i>
+                        {% elif 'Flask' in tech %}<img src="{{ url_for('static', filename='images/icons/flask_icon_white.svg') }}" alt="Flask" class="h-12 w-12 mx-auto mb-3 filter brightness-0 invert"> {# Icon trắng cho Flask #}
+                        {% elif 'PostgreSQL' in tech %}<i class="fas fa-database fa-3x mb-3 text-sky-200"></i>
+                        {% elif 'Tailwind' in tech %}<img src="{{ url_for('static', filename='images/icons/tailwind_icon_white.svg') }}" alt="Tailwind CSS" class="h-12 w-12 mx-auto mb-3 filter brightness-0 invert"> {# Icon trắng cho Tailwind #}
+                        {% else %}<i class="fas fa-cog fa-3x mb-3 text-gray-200"></i>{% endif %}
+                        <h4 class="text-lg font-semibold text-white">{{ tech }}</h4>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Section 4: Đội Ngũ Phát Triển - NỀN SÁNG -->
+    {% if page_team_info %}
+    <section class="py-16 md:py-24 bg-slate-50">
+        <!-- ... (Nội dung không đổi) ... -->
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12 md:mb-16" data-aos="fade-up" data-aos-duration="700">
+                <i class="fas fa-users-cog fa-3x text-sky-600 mb-4"></i>
+                <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-3 tracking-tight">Đội Ngũ Phát Triển</h2>
+                <p class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
+                    Những cá nhân tài năng và nhiệt huyết đã cùng nhau tạo nên dự án này.
+                </p>
+            </div>
+
+            <!-- Giảng viên -->
+            <div class="text-center mb-12 md:mb-16" data-aos="zoom-in-up" data-aos-duration="700">
+                <h3 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-graduation-cap text-sky-600 mr-2"></i>Giảng Viên Hướng Dẫn
+                </h3>
+                <div class="inline-block bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-sky-200 max-w-lg mx-auto transform transition-all duration-300 hover:shadow-sky-300/40 hover:-translate-y-1">
+                    <p class="text-xl md:text-2xl font-semibold text-sky-700">{{ page_team_info.lecturer }}</p>
+                </div>
+            </div>
+
+            <!-- Thành viên -->
+            {% if page_team_info.members and page_team_info.members|length > 0 %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12">
+                {% for member in page_team_info.members %}
+                <div data-aos="fade-up" data-aos-duration="600" data-aos-delay="{{ loop.index0 * 150 }}">
+                    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col group h-full transform transition-all duration-300 ease-in-out hover:shadow-sky-500/60 hover:-translate-y-2">
+                        <div class="relative h-72 bg-slate-300">
+                            <img src="{{ url_for('static', filename=(member.avatar or 'images/avatars/default_avatar.png')) }}" 
+                                 alt="Ảnh {{ member.name }}" 
+                                 class="w-full h-full object-cover object-center group-hover:scale-105 group-hover:brightness-105 transition-all duration-500 ease-out">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-5 opacity-0 group-hover:opacity-100 transition-opacity duration-400 ease-in-out">
+                                <h3 class="text-2xl font-bold text-white drop-shadow-lg leading-tight translate-y-4 group-hover:translate-y-0 transition-transform duration-300 ease-out">{{ member.name }}</h3>
+                                {% if member.role %}
+                                <p class="text-sm text-sky-300 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out delay-100">{{ member.role }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="p-6 flex-grow flex flex-col text-center">
+                            {% if member.bio %}
+                            <p class="text-gray-700 text-base mb-5 flex-grow italic leading-relaxed">"{{ member.bio }}"</p>
+                            {% else %}
+                            <p class="text-gray-500 text-base mb-5 flex-grow italic leading-relaxed">Thành viên đóng góp cho dự án.</p>
+                            {% endif %}
+                            <div class="border-t border-gray-200 pt-4 mt-auto">
+                                {% if member.mssv %}
+                                <p class="text-sm text-gray-500 mb-3 font-mono">MSSV: {{ member.mssv }}</p>
+                                {% endif %}
+                                <div class="flex space-x-4 justify-center items-center">
+                                    {% if member.google %}<a href="{{ member.google }}" target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-red-500 text-2xl transform hover:scale-125 transition-transform duration-150"><i class="fab fa-google"></i></a>{% endif %}
+                                    {% if member.github %}<a href="{{ member.github }}" target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-gray-900 text-2xl transform hover:scale-125 transition-transform duration-150"><i class="fab fa-github"></i></a>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Section 5: Call to Action hoặc Lời kết -->
+    <section class="py-16 md:py-24 bg-gradient-to-r from-blue-600 to-blue-400 text-white"> {# <<< ĐỔI NỀN Ở ĐÂY #}
+        <div class="container mx-auto px-4 text-center" data-aos="zoom-in" data-aos-duration="800">
+            <h2 class="text-3xl md:text-4xl font-bold mb-6 text-white">Sẵn Sàng Khám Phá?</h2>
+            <p class="text-lg md:text-xl max-w-xl mx-auto mb-8 text-gray-100">
+                Quay lại trang chủ để bắt đầu phân tích các bài viết mới nhất từ VnExpress.
+            </p>
+            <a href="{{ url_for('main.index') }}"
+               class="bg-yellow-400 hover:bg-yellow-300 text-blue-800 font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 transform hover:scale-105 text-lg">
+                Phân Tích Ngay <i class="fas fa-play-circle ml-2"></i>
+            </a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+  AOS.init({
+    once: true, 
+    offset: 50, 
+    duration: 700, // Tăng nhẹ duration mặc định
+    easing: 'ease-out-quad', // Đổi easing cho mượt hơn chút
+  });
+</script>
+<style>
+    .pattern-dots-lg {
+        background-image: radial-gradient(currentColor 1.5px, transparent 1.5px); /* Chấm nhỏ hơn chút */
+        background-size: 20px 20px; /* Kích thước pattern nhỏ hơn */
+    }
+</style>
+{% endblock %}
