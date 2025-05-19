@@ -2,6 +2,12 @@
 
 {% block title %}{{ title }}{% endblock %}
 
+{% macro render_category_option(cat, prefix='') %}
+  <div class="category-option px-3 py-2 hover:bg-blue-100 cursor-pointer flex items-center" data-value="{{ cat }}">
+    <span>{{ prefix }}{{ cat }}</span>
+  </div>
+{% endmacro %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-8 animate-fade-in">
     <!-- Hero Section -->
@@ -37,20 +43,30 @@
                 <i class="fas fa-search-plus mr-2"></i> Analyze Now
             </button>
         </form>
+        <div class="mt-4 flex justify-center">
+            <a href="{{ url_for('main.scrape_center_page') }}" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105">
+                <i class="fas fa-layer-group mr-2"></i> Scrape theo chuyên mục (Scrape Center)
+            </a>
+        </div>
     </div>
 
     <!-- Filter and Sort Section -->
     <div class="bg-white p-6 rounded-xl shadow-lg mb-8 animate-fade-in">
         <form method="GET" action="{{ url_for('main.index') }}" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
-            <input type="hidden" name="q" value="{{ request.args.get('q', '') }}" />
-            <div>
-                <label for="category" class="block text-sm font-medium text-gray-700 mb-1">Filter by Category</label>
-                <select id="category" name="category"
-                        class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all duration-150">
-                    {% for cat in categories %}
-                    <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>{{ cat }}</option>
+            <input type="hidden" name="q" id="hidden-search-q" value="{{ request.args.get('q', '') }}" />
+            <div class="relative">
+                <label for="category-autocomplete" class="block text-sm font-medium text-gray-700 mb-1">Filter by Category</label>
+                <input type="text" id="category-autocomplete" name="category" autocomplete="off"
+                       class="block w-full p-2 border border-gray-300 rounded-md shadow focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all duration-150"
+                       placeholder="Gõ hoặc chọn chuyên mục..." value="{{ current_category if current_category != 'All Categories' else '' }}">
+                <div id="category-dropdown" class="absolute left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-1 max-h-60 overflow-y-auto hidden">
+                    <div class="category-option px-3 py-2 hover:bg-blue-100 cursor-pointer flex items-center" data-value="All Categories">
+                        <span><i class="fas fa-globe-asia mr-1"></i> Tất cả chuyên mục</span>
+                    </div>
+                    {% for cat in categories if cat != 'All Categories' %}
+                        {{ render_category_option(cat) }}
                     {% endfor %}
-                </select>
+                </div>
             </div>
             <div>
                 <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
@@ -89,8 +105,8 @@
             <img src="{{ article.image_url or url_for('static', filename='images/article_placeholder.png') }}" alt="Article thumbnail" class="w-full h-48 object-cover">
             <div class="p-6 flex flex-col flex-grow">
                 <div class="flex justify-between items-center mb-2">
-                    {% if article.category %}
-                    <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full shadow">{{ article.category }}</span>
+                    {% if article.category and article.category.name %}
+                    <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full shadow">{{ article.category.name }}</span>
                     {% endif %}
                     {% if article.publish_datetime %}
                     <span class="text-xs text-gray-500">{{ article.publish_datetime.strftime('%b %d, %Y') }}</span> 
@@ -128,7 +144,7 @@
         <nav class="flex justify-center">
             <ul class="inline-flex items-center -space-x-px">
                 <li>
-                    <a href="{{ url_for('main.index', page=pagination.prev_num) if pagination.has_prev else '#' }}"
+                    <a href="{{ url_for('main.index', page=pagination.prev_num, category=current_category, date_from=current_date_from, date_to=current_date_to, sort_by=current_sort_by, q=request.args.get('q', '')) if pagination.has_prev else '#' }}"
                        class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700
                               {% if not pagination.has_prev %} opacity-50 cursor-not-allowed {% endif %} transition-all duration-150">
                         Previous
@@ -145,7 +161,7 @@
                         </li>
                         {% else %}
                         <li>
-                            <a href="{{ url_for('main.index', page=page_num) }}"
+                            <a href="{{ url_for('main.index', page=page_num, category=current_category, date_from=current_date_from, date_to=current_date_to, sort_by=current_sort_by, q=request.args.get('q', '')) }}"
                                class="py-2 px-3 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150">
                                 {{ page_num }}
                             </a>
@@ -156,7 +172,7 @@
                     {% endif %}
                 {% endfor %}
                 <li>
-                    <a href="{{ url_for('main.index', page=pagination.next_num) if pagination.has_next else '#' }}"
+                    <a href="{{ url_for('main.index', page=pagination.next_num, category=current_category, date_from=current_date_from, date_to=current_date_to, sort_by=current_sort_by, q=request.args.get('q', '')) if pagination.has_next else '#' }}"
                        class="py-2 px-3 leading-tight text-gray-500 bg-white rounded-r-lg border border-gray-300 hover:bg-gray-100 hover:text-gray-700
                               {% if not pagination.has_next %} opacity-50 cursor-not-allowed {% endif %} transition-all duration-150">
                         Next
@@ -208,6 +224,52 @@
               }
           });
       }
+  });
+
+  // Autocomplete + dropdown cho filter by category
+  document.addEventListener("DOMContentLoaded", function () {
+    var input = document.getElementById('category-autocomplete');
+    var dropdown = document.getElementById('category-dropdown');
+    var options = dropdown.querySelectorAll('.category-option');
+    var form = input.closest('form');
+    function showDropdown() {
+      dropdown.classList.remove('hidden');
+    }
+    function hideDropdown() {
+      setTimeout(function() { dropdown.classList.add('hidden'); }, 150); // delay để click chọn
+    }
+    function filterOptions() {
+      var q = input.value.trim().toLowerCase();
+      options.forEach(function(opt) {
+        var text = opt.textContent.trim().toLowerCase();
+        if (!q || text.includes(q)) {
+          opt.style.display = '';
+        } else {
+          opt.style.display = 'none';
+        }
+      });
+    }
+    input.addEventListener('focus', showDropdown);
+    input.addEventListener('input', function() {
+      showDropdown();
+      filterOptions();
+    });
+    input.addEventListener('blur', hideDropdown);
+    options.forEach(function(opt) {
+      opt.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        input.value = opt.getAttribute('data-value');
+        hideDropdown();
+        form.submit();
+      });
+    });
+    // Nếu người dùng nhấn Enter khi đang focus input, submit form
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        form.submit();
+      }
+    });
   });
 </script>
 
