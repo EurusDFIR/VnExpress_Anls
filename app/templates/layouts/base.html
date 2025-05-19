@@ -17,14 +17,12 @@
     {# Link đến file CSS tùy chỉnh của bạn (nếu có) #}
     <link
       rel="stylesheet"
+      {#
       href="{{ url_for('static', filename='css/custom.css') }}"
+      #}
     />
     <style>
-      /* Thêm một chút CSS tùy chỉnh nếu cần */
-      .prose img {
-        margin-top: 1em;
-        margin-bottom: 1em;
-      } /* Căn chỉnh ảnh trong nội dung bài viết */
+     
 
       #suggestions-box {
         background: #f8fafc; /* Tailwind slate-50 */
@@ -224,32 +222,7 @@
         }
       });
 
-      // Lấy danh sách bài viết mới nhất (có thể mở rộng hoặc thay đổi theo nhu cầu)
-      async function fetchLatestArticles() {
-        try {
-          const resp = await fetch("/api/latest-articles");
-          if (!resp.ok) throw new Error("Không lấy được dữ liệu bài viết");
-          const data = await resp.json();
-          const articlesContainer = document.getElementById("latest-articles");
-          articlesContainer.innerHTML = data.articles
-            .map(
-              (a) => `<div class="mb-4 p-4 bg-white rounded-lg shadow">
-                <a href="/article/${
-                  a.id
-                }" class="text-lg font-semibold text-blue-600 hover:text-blue-800"
-                  >${a.title}</a
-                >
-                <p class="text-sm text-gray-500 mt-1">
-                  ${new Date(a.published_at).toLocaleString("vi-VN")}
-                </p>
-              </div>`
-            )
-            .join("");
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
+      // Update DateTime
       function updateDateTime() {
         const now = new Date();
         document.getElementById("current-datetime").textContent =
@@ -264,10 +237,6 @@
       }
       setInterval(updateDateTime, 1000);
       updateDateTime();
-
-      document.addEventListener("DOMContentLoaded", function () {
-        fetchLatestArticles();
-      });
     </script>
   </body>
 </html>
