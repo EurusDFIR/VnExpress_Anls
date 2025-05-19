@@ -51,7 +51,7 @@ def index():
     elif sort_by_filter == 'oldest_first':
         query = query.order_by(Article.publish_datetime.asc().nullsfirst())
     elif sort_by_filter == 'most_comments':
-        query = query.order_by(Article.total_comments_count.desc().nullslast())
+        query = query.order_by(Article.total_comment_count.desc().nullslast())
     categories_query = db.session.query(Article.category).distinct().order_by(Article.category).all()
     categories = ["All Categories"] + [cat[0] for cat in categories_query if cat[0]]
     articles_pagination = query.paginate(page=page, per_page=9, error_out=False)
@@ -206,3 +206,17 @@ def latest_articles():
     articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
     return render_template('latest_articles.html', title='Bài viết mới nhất', articles=articles)
 
+@main_bp.route('/api/latest-articles')
+def latest_articles_api():
+    articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
+    articles_data = []
+    for article in articles:
+        articles_data.append({
+            'id': article.id,
+            'title': article.title,
+            'url': article.url,
+            'publish_datetime': article.publish_datetime.isoformat() if article.publish_datetime else None,
+            'category': article.category,
+            'author': article.author,
+        })
+    return jsonify({'latest_articles': articles_data})
