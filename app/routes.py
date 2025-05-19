@@ -391,3 +391,17 @@ def latest_articles():
     articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
     return render_template('latest_articles.html', title='Bài viết mới nhất', articles=articles)
 
+@main_bp.route('/api/latest-articles')
+def latest_articles_api():
+    articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
+    articles_data = []
+    for article in articles:
+        articles_data.append({
+            'id': article.id,
+            'title': article.title,
+            'url': article.url,
+            'publish_datetime': article.publish_datetime.isoformat() if article.publish_datetime else None,
+            'category': article.category,
+            'author': article.author,
+        })
+    return jsonify({'latest_articles': articles_data})
