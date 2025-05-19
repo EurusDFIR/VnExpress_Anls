@@ -11,6 +11,42 @@ from dotenv import load_dotenv
 import time
 from collections import Counter
 
+#TuanAnh_update
+TEAM_INFO_PAGE = {
+    "lecturer": "Nguyễn Thế Bảo", # Tên giảng viên
+    "members": [
+        {
+            "name": "Lê Văn Hoàng", # Thay tên
+            "mssv": "2224802010279", # Thay MSSV
+            "avatar": "images/avatars/hoang.png", # Đường dẫn đến ảnh trong static/images/avatars/
+            "role": "Project Lead & Backend Developer", # Vai trò
+            "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.", # Mô tả ngắn
+            "google": "2224802010279@student.tdmu.edu.vn", # Link Goole
+            "github": "https://github.com/EurusDFIR" # Link GitHub 
+        },
+        {
+            "name": "Lê Nguyễn Hoàng", 
+            "mssv": "222480201081", 
+            "avatar": "images/avatars/hoang.png", 
+            "role": "Backend Developer", 
+            "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.",
+            "google": "2224802010814@student.tdmu.edu.vn", 
+            "github": "https://github.com/nvhoang" 
+        },
+        {
+            "name": "Nguyễn Tuấn Anh", 
+            "mssv": "2224802010328", 
+            "avatar": "images/avatars/anh.png", 
+            "role": "Frontend Developer & UI/UX Designer",
+            "bio": "Yêu thích việc tạo ra những giao diện đẹp mắt và thân thiện với người dùng.",
+            "google": "2224802010328@student.tdmu.edu.vn", 
+            "github": "https://github.com/ALZPotato" 
+        },
+        # Thêm các thành viên khác vào đây theo cấu trúc tương tự
+    ],
+    "team_photo": "images/team_photo.png" # Tùy chọn: đường dẫn đến ảnh cả nhóm trong static/images/
+}
+
 load_dotenv()
 
 main_bp = Blueprint('main', __name__)
@@ -63,7 +99,8 @@ def index():
                            current_date_from=date_from_str,
                            current_date_to=date_to_str,
                            current_sort_by=sort_by_filter,
-                           current_year=datetime.utcnow().year
+                           current_year=datetime.utcnow().year,
+                           page_team_info=TEAM_INFO_PAGE #TuanAnh_update
                            )
 
 @main_bp.route('/article/<int:article_id>')
