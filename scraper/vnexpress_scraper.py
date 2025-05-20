@@ -1,3 +1,59 @@
+from app.models import Category, Article
+from sqlalchemy import func
+# --- CATEGORY SCRAPE LOGIC ---
+def get_true_scrape_targets(selected_map, db_session, default_article_count_if_not_set=10):
+    """
+    selected_map: dict {category_id: num_articles or None}
+    Trả về list (category_name, category_url, num_articles) thực sự cần scrape (không bị lồng nhau)
+    """
+    # Lấy toàn bộ categories từ DB
+    all_categories = db_session.query(Category).all()
+    id_to_cat = {c.id: c for c in all_categories}
+    # Xây dựng map cha-con
+    parent_to_children = {}
+    for cat in all_categories:
+        if cat.parent_id:
+            parent_to_children.setdefault(cat.parent_id, []).append(cat.id)
+    # Hàm đệ quy lấy tất cả con cháu của 1 category
+    def get_all_descendants(cat_id):
+        result = set()
+        children = parent_to_children.get(cat_id, [])
+        for child_id in children:
+            result.add(child_id)
+            result.update(get_all_descendants(child_id))
+        return result
+    # Xác định các category_id thực sự cần scrape
+    true_targets = []
+    selected_ids = set(selected_map.keys())
+    for cat_id in selected_ids:
+        descendants = get_all_descendants(cat_id)
+        # Nếu không có con cháu nào được chọn riêng, hoặc là nút lá
+        if not (descendants & selected_ids):
+            num_articles = selected_map[cat_id] or default_article_count_if_not_set
+            cat = id_to_cat[cat_id]
+            true_targets.append((cat.name, cat.url, num_articles))
+    # Loại bỏ trùng lặp url, giữ lại entry có count lớn hơn
+    url_to_entry = {}
+    for name, url, count in true_targets:
+        if url not in url_to_entry or count > url_to_entry[url][2]:
+            url_to_entry[url] = (name, url, count)
+    return list(url_to_entry.values())
+
+# --- CATEGORY ID MAPPING FOR ARTICLE ---
+def get_category_id_from_scraped_info(category_name, category_url, db_session, default_category_id=None):
+    """
+    Tìm category_id dựa trên tên hoặc url. Nếu không có trả về default_category_id.
+    So khớp tên chuyên mục không phân biệt hoa thường và loại bỏ khoảng trắng thừa.
+    """
+    if category_name:
+        category_name = category_name.strip().lower()
+    cat = db_session.query(Category).filter(
+        (Category.url == category_url) |
+        (func.lower(func.trim(Category.name)) == category_name)
+    ).first()
+    if cat:
+        return cat.id
+    return default_category_id
 # scraper/vnexpress_scraper.py
 
 import requests
@@ -6,6 +62,9 @@ import time
 from datetime import datetime
 import sys
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -15,6 +74,20 @@ from app.models import Article, Comment
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
+
+@contextmanager
+def app_context_session(flask_app):
+    """Context manager that provides both app context and database session."""
+    with flask_app.app_context():
+        session = db.session()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
 
 def parse_datetime_from_str(date_str):
     if not date_str:
@@ -110,6 +183,9 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
         if og_image and og_image.get('content'):
             image_url = og_image['content']
 
+        # Lấy category_id từ tên category
+        category_id = get_category_id_from_scraped_info(category, article_url, db_session)
+
         new_article = Article(
             url=article_url,
             title=title,
@@ -118,24 +194,31 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
             author=author,
             published_date_str=date_str,
             publish_datetime=publish_datetime_obj,
-            category=category,
+            category_id=category_id,  # Sử dụng category_id thay vì category
             last_scraped_at=datetime.utcnow(),
             image_url=image_url
         )
         db_session.add(new_article)
-        db_session.flush()
+        db_session.flush()  # Ensure the article has an ID
+        
         if scrape_comments:
-            num_comments = scrape_and_save_comments(new_article, db_session)
-            if num_comments > 0:
-                db_session.commit()
-                print(f"Đã lưu bài viết: {title[:50]}... và {num_comments} bình luận.")
-            else:
+            try:
+                num_comments = scrape_and_save_comments(new_article, db_session)
+                if num_comments > 0:
+                    db_session.commit()
+                    print(f"Đã lưu bài viết: {title[:50]}... và {num_comments} bình luận.")
+                else:
+                    db_session.rollback()
+                    print(f"Lỗi khi scrape/lưu bình luận, rollback cả bài viết: {article_url}")
+                    return None
+            except Exception as e:
+                print(f"Lỗi khi scrape comments: {e}")
                 db_session.rollback()
-                print(f"Lỗi khi scrape/lưu bình luận, rollback cả bài viết: {article_url}")
                 return None
         else:
             db_session.commit()
             print(f"Đã lưu bài viết: {title[:50]}...")
+        
         return new_article
 
     except requests.exceptions.RequestException as e:
@@ -147,7 +230,7 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
         db_session.rollback()
         return None
 
-def get_article_urls_from_category_page(category_url, max_articles=10):
+def get_article_urls_from_category_page(category_url, max_articles=10, db_session=None):
     urls = set()
     print(f"Đang lấy URL từ chuyên mục: {category_url}")
     try:
@@ -170,7 +253,13 @@ def get_article_urls_from_category_page(category_url, max_articles=10):
                     if article_url.startswith('/'):
                         article_url = "https://vnexpress.net" + article_url
                     if article_url.startswith('https://vnexpress.net/') and article_url.endswith('.html'):
-                        found_links.add(article_url)
+                        # Kiểm tra xem bài viết đã tồn tại trong DB chưa
+                        if db_session:
+                            existing_article = db_session.query(Article).filter_by(url=article_url).first()
+                            if not existing_article:
+                                found_links.add(article_url)
+                        else:
+                            found_links.add(article_url)
                 if len(found_links) >= max_articles:
                     break
             if len(found_links) >= max_articles:
@@ -178,7 +267,7 @@ def get_article_urls_from_category_page(category_url, max_articles=10):
         urls.update(list(found_links)[:max_articles])
     except requests.exceptions.RequestException as e:
         print(f"Lỗi khi lấy URL từ chuyên mục {category_url}: {e}")
-    print(f"Tìm thấy {len(urls)} URL bài viết.")
+    print(f"Tìm thấy {len(urls)} URL bài viết mới.")
     return list(urls)
 
 try:
@@ -327,7 +416,6 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
         return 0
     return saved_count
 
-
 def scrape_and_save_comments(article_db_object, db_session):
     if not article_db_object or not article_db_object.url:
         print("Đối tượng bài viết không hợp lệ cho scrape comments.")
@@ -396,7 +484,7 @@ def scrape_and_save_comments(article_db_object, db_session):
                 for reply_el in reply_elements:
                     process_comment_element(reply_el, parent_api_id=comment_api_id)
         except Exception as e:
-            pass  # Bỏ qua lỗi nhỏ để không chậm
+            pass  
 
     for el in comment_elements:
         process_comment_element(el)

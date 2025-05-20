@@ -119,7 +119,6 @@ async def fetch_comments_html_with_playwright(article_url, max_load_more_clicks=
                 if isinstance(res, Exception):
                     if "not attached to the DOM" in str(res):
                         continue
-                
                     print(f"Playwright: Lỗi khi click 'Xem trả lời' (song song) nút {i+1}: {res}")
         t_after_reply = time.time()
         print(f"[DEBUG] Thời gian click tất cả 'Xem trả lời': {t_after_reply-t_after_loadmore:.2f}s")

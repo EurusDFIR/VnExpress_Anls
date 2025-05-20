@@ -11,7 +11,7 @@ class Article(db.Model):
     author = db.Column(db.String(200),nullable=True)
     published_date_str = db.Column(db.String(100),nullable=True)
     publish_datetime = db.Column(db.DateTime, nullable=True,index=True)
-    category = db.Column(db.String(200),nullable = True, index = True)
+    # category = db.Column(db.String(200),nullable = True, index = True)  # Đã chuyển sang dùng category_id và relationship
     total_comment_count = db.Column(db.Integer, default =0)
     last_scraped_at = db.Column(db.DateTime, default=lambda: datetime.utcnow())
     sentiment_score = db.Column(db.Float, nullable=True)
@@ -20,6 +20,9 @@ class Article(db.Model):
 
     comments = db.relationship('Comment', backref = 'article',lazy = 'dynamic', cascade="all, delete-orphan")
     article_topics = db.relationship('ArticleTopic', backref = 'article', lazy = 'dynamic', cascade="all, delete-orphan")   
+
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
+
 
     def __repr__(self):
         return f'<Article {self.title[:50]}...>'
@@ -67,3 +70,18 @@ class ArticleTopic(db.Model):
     article_id = db.Column(db.Integer, db.ForeignKey('articles.id'), primary_key=True)
     topic_id = db.Column(db.Integer, db.ForeignKey('topics.id'), primary_key=True)
     relevance_score = db.Column(db.Float, nullable=True) # Điểm tương quan giữa bài viết và chủ đề
+
+
+class Category(db.Model):
+    __tablename__ = 'categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    url = db.Column(db.String, unique=True, nullable=False)
+    vnexpress_slug = db.Column(db.String, unique=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    last_scraped_article_count = db.Column(db.Integer, default=0)
+    parent = db.relationship('Category', remote_side=[id], backref='children')
+    articles = db.relationship('Article', backref='category', lazy=True)
+

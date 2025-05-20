@@ -1,11 +1,11 @@
-# app/routes.py
+# --- moved Blueprint definition and imports to the top ---
 from flask import render_template, request, redirect, url_for, flash, abort, jsonify
 from app import db
-from app.models import Article
-from scraper.vnexpress_scraper import scrape_article_details_and_save, get_article_urls_from_category_page 
+from app.models import Article, Category
+from scraper.vnexpress_scraper import get_true_scrape_targets, get_article_urls_from_category_page, scrape_article_details_and_save, scrape_and_save_comments
 from urllib.parse import urlparse
 from datetime import datetime
-from flask import Blueprint
+from flask import Blueprint, current_app
 import os
 from dotenv import load_dotenv
 import time
@@ -46,10 +46,187 @@ TEAM_INFO_PAGE = {
     ],
     "team_photo": "images/team_photo.png" # Tùy chọn: đường dẫn đến ảnh cả nhóm trong static/images/
 }
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
 main_bp = Blueprint('main', __name__)
+
+    # --- Scrape Center routes ---
+@main_bp.route('/scrape-center')
+def scrape_center_page():
+    def get_category_tree(session):
+        categories_tree = []
+        root_categories = session.query(Category).filter_by(parent_id=None, is_active=True).order_by(Category.name).all()
+        def build_children(parent_category_db_obj):
+            children_data = []
+            children_db = session.query(Category).filter_by(parent_id=parent_category_db_obj.id, is_active=True).order_by(Category.name).all()
+            for child_db in children_db:
+                children_data.append({
+                    "id": child_db.id,
+                    "name": child_db.name,
+                    "url": child_db.url,
+                    "children": build_children(child_db)
+                })
+            return children_data
+        for root_cat in root_categories:
+            categories_tree.append({
+                "id": root_cat.id,
+                "name": root_cat.name,
+                "url": root_cat.url,
+                "children": build_children(root_cat)
+            })
+        return categories_tree
+    category_tree_data = get_category_tree(db.session)
+    return render_template('scrape_center.html', title="Scrape Center", categories_tree=category_tree_data)
+
+@main_bp.route('/start-bulk-scrape', methods=['POST'])
+def start_bulk_scrape():
+    selected_ids = request.form.getlist('selected_categories')
+    scrape_comments_flag = request.form.get('scrape_comments') == 'true'
+    
+    print("\n=== BẮT ĐẦU QUÁ TRÌNH SCRAPE ===")
+    print(f"Các category được chọn: {selected_ids}")
+    
+    if not selected_ids:
+        flash('Vui lòng chọn ít nhất một chuyên mục để scrape.', 'warning')
+        return redirect(url_for('main.scrape_center_page'))
+        
+    selected_map = {}
+    for cat_id_str in selected_ids:
+        try:
+            cat_id = int(cat_id_str)
+            count_str = request.form.get(f'count_for_cat_{cat_id}')
+            num_articles = int(count_str) if count_str and count_str.isdigit() else None
+            selected_map[cat_id] = num_articles
+            print(f"Category ID {cat_id}: sẽ scrape {num_articles if num_articles else 10} bài")
+        except ValueError:
+            flash(f"Giá trị không hợp lệ cho category ID {cat_id_str} hoặc số lượng.", "danger")
+            return redirect(url_for('main.scrape_center_page'))
+            
+    default_cat = db.session.query(Category).filter(Category.name.ilike("Chưa phân loại")).first()
+    default_cat_id = default_cat.id if default_cat else None
+    
+    flash('Bắt đầu quá trình scrape. Việc này có thể mất vài phút...', 'info')
+    scrape_targets_list = get_true_scrape_targets(selected_map, db.session, default_article_count_if_not_set=10)
+    
+    print(f"\nCác mục tiêu scrape thực sự: {scrape_targets_list}")
+    total_articles_scraped_session = 0
+    total_comments_scraped_session = 0
+    
+    app = current_app._get_current_object()
+    
+    # Create a wrapper function to handle app context in threads
+    def scrape_with_app_context(url):
+        try:
+            with app.app_context():
+                # Create a new session for this thread
+                session = db.session()
+                try:
+                    result = scrape_article_details_and_save(
+                        url, 
+                        session,
+                        scrape_comments=scrape_comments_flag
+                    )
+                    # If we have a result, get the article ID before committing
+                    article_id = None
+                    if result and hasattr(result, 'id'):
+                        article_id = result.id
+                        session.commit()
+                        return article_id  # Return just the ID instead of the Article object
+                    return None
+                except Exception as e:
+                    print(f"Lỗi khi scrape {url}: {e}")
+                    if session.is_active:
+                        session.rollback()
+                    return None
+                finally:
+                    session.close()
+        except Exception as e:
+            print(f"Lỗi context khi scrape {url}: {e}")
+            return None
+    
+    # Use a single ThreadPoolExecutor for scraping article details across all categories
+    with ThreadPoolExecutor(max_workers=current_app.config.get('SCRAPE_MAX_WORKERS', 5)) as executor:
+        for cat_name, cat_url, num_articles_to_get in scrape_targets_list:
+            print(f"\n=== ĐANG SCRAPE CHUYÊN MỤC: {cat_name} ===")
+            print(f"URL chuyên mục: {cat_url}")
+            print(f"Số bài cần lấy: {num_articles_to_get}")
+            
+            flash(f"Đang xử lý chuyên mục: {cat_name} ({num_articles_to_get} bài)...", "info")
+            
+            # Stage 1: Get article URLs
+            article_urls_from_cat = get_article_urls_from_category_page(
+                cat_url, 
+                max_articles=num_articles_to_get,
+                db_session=db.session
+            )
+            
+            if not article_urls_from_cat:
+                print(f"Không tìm thấy URL bài viết mới nào cho {cat_name} từ {cat_url}")
+                continue
+                
+            print(f"Tìm thấy {len(article_urls_from_cat)} URL bài viết mới. Bắt đầu scrape chi tiết...")
+            
+            # Stage 2: Scrape article details in parallel
+            future_to_url = {
+                executor.submit(scrape_with_app_context, url): url 
+                for url in article_urls_from_cat
+            }
+
+            articles_scraped_this_category = 0
+            comments_scraped_this_category = 0
+
+            for future in as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    article_id = future.result()
+                    if article_id:
+                        print(f"Đã xử lý xong chi tiết cho URL: {url}")
+                        articles_scraped_this_category += 1
+                        total_articles_scraped_session += 1
+
+                        if scrape_comments_flag:
+                            with app.app_context():
+                                session = db.session()
+                                try:
+                                    # Get fresh Article object from database
+                                    article_db_obj = session.get(Article, article_id)
+                                    if article_db_obj:
+                                        print(f"Bắt đầu scrape bình luận cho bài viết: {article_db_obj.title[:30]}...")
+                                        num_new_comments = scrape_and_save_comments(article_db_obj, session, app)
+                                        if num_new_comments > 0:
+                                            comments_scraped_this_category += num_new_comments
+                                            total_comments_scraped_session += num_new_comments
+                                            print(f"Đã scrape được {num_new_comments} bình luận mới cho {article_db_obj.title[:30]}")
+                                        else:
+                                            print(f"Không có bình luận mới hoặc lỗi khi scrape bình luận cho {article_db_obj.title[:30]}")
+                                        session.commit()
+                                except Exception as e:
+                                    print(f"Lỗi khi scrape bình luận cho {url}: {e}")
+                                    if session.is_active:
+                                        session.rollback()
+                                finally:
+                                    session.close()
+                    else:
+                        print(f"Bài viết đã tồn tại hoặc không thể scrape chi tiết cho URL: {url}")
+                except Exception as exc:
+                    print(f'URL {url} tạo ra exception khi scrape chi tiết: {exc}')
+            
+            print(f"Hoàn tất xử lý {articles_scraped_this_category} bài cho chuyên mục {cat_name}.")
+            if scrape_comments_flag:
+                print(f"Đã scrape {comments_scraped_this_category} bình luận cho chuyên mục {cat_name}.")
+
+    print(f"\n=== KẾT THÚC TOÀN BỘ QUÁ TRÌNH SCRAPE ===")
+    print(f"Tổng số bài đã scrape: {total_articles_scraped_session}")
+    print(f"Tổng số bình luận đã scrape: {total_comments_scraped_session}")
+    
+    if total_articles_scraped_session == 0:
+        flash(f'Không tìm thấy bài viết mới nào để scrape trong các chuyên mục đã chọn.', 'warning')
+    else:
+        flash(f'Hoàn tất scrape! Đã scrape được {total_articles_scraped_session} bài viết mới và {total_comments_scraped_session} bình luận (nếu có).', 'success')
+    return redirect(url_for('main.index'))
+
 
 @main_bp.route('/')
 @main_bp.route('/index')
@@ -63,13 +240,15 @@ def index():
     query = Article.query
     if search_query:
         search = f"%{search_query}%"
-        query = query.filter(
+        # Join với Category để tìm theo tên chuyên mục
+        query = query.join(Article.category, isouter=True).filter(
             (Article.title.ilike(search)) |
-            (Article.category.ilike(search)) |
+            (Category.name.ilike(search)) |
             (Article.author.ilike(search))
         )
     if category_filter and category_filter != "All Categories":
-        query = query.filter(Article.category == category_filter)
+        # Lọc theo tên chuyên mục qua quan hệ category (relationship)
+        query = query.join(Article.category).filter(Category.name == category_filter)
     if date_from_str:
         try:
             date_from_obj = datetime.strptime(date_from_str, '%Y-%m-%d')
@@ -87,10 +266,11 @@ def index():
     elif sort_by_filter == 'oldest_first':
         query = query.order_by(Article.publish_datetime.asc().nullsfirst())
     elif sort_by_filter == 'most_comments':
-        query = query.order_by(Article.total_comments_count.desc().nullslast())
-    categories_query = db.session.query(Article.category).distinct().order_by(Article.category).all()
-    categories = ["All Categories"] + [cat[0] for cat in categories_query if cat[0]]
-    articles_pagination = query.paginate(page=page, per_page=9, error_out=False)
+        query = query.order_by(Article.total_comment_count.desc().nullslast())
+    # Lấy danh sách chuyên mục từ bảng Category, không join với Article để tránh cartesian product
+    categories_query = db.session.query(Category).filter(Category.is_active == True).order_by(Category.name).all()
+    categories = ["All Categories"] + [cat.name for cat in categories_query]
+    articles_pagination = query.paginate(page=page, per_page=12, error_out=False)
     articles_on_page = articles_pagination.items
     return render_template('index.html', title='VnExpress Analyzer',
                            articles=articles_on_page, pagination=articles_pagination,
@@ -196,7 +376,7 @@ def analyze_new_article():
     newly_scraped_article = scrape_article_details_and_save(article_url, db.session, scrape_comments=scrape_comments, max_comments=max_comments)
     t1 = time.time()
     scrape_article_time = t1 - t0
-    if newly_scraped_article and newly_scraped_article.id:
+    if newly_scraped_article:
         total_time = t1 - t0
         flash(f'Đã phân tích thành công bài viết: {newly_scraped_article.title}', 'success')
         flash(f'Thời gian scrape: {scrape_article_time:.2f}s', 'info')
@@ -219,7 +399,11 @@ def search_suggest():
             for kw in keywords:
                 like_kw = f"%{kw}%"
                 title_matches += Article.query.filter(Article.title.ilike(like_kw)).order_by(Article.publish_datetime.desc()).all()
-                category_matches += Article.query.filter(Article.category.ilike(like_kw)).order_by(Article.publish_datetime.desc()).all()
+                # Search categories by Category.name, then get unique categories, then get articles in those categories
+                matched_categories = Category.query.filter(Category.name.ilike(like_kw)).all()
+                for cat in matched_categories:
+                    # Add all articles in this category (recent first)
+                    category_matches += Article.query.filter(Article.category_id == cat.id).order_by(Article.publish_datetime.desc()).all()
                 author_matches += Article.query.filter(Article.author.ilike(like_kw)).order_by(Article.publish_datetime.desc()).all()
             # Loại trùng lặp, ưu tiên tiêu đề, sau đó category, author
             seen = set()
@@ -227,10 +411,11 @@ def search_suggest():
                 if art.title and art.title not in seen:
                     suggestions.append({'type': 'title', 'value': art.title})
                     seen.add(art.title)
+            # For category suggestions, show the category name (not the object)
             for art in category_matches:
-                if art.category and art.category not in seen:
-                    suggestions.append({'type': 'category', 'value': art.category})
-                    seen.add(art.category)
+                if art.category and art.category.name and art.category.name not in seen:
+                    suggestions.append({'type': 'category', 'value': art.category.name})
+                    seen.add(art.category.name)
             for art in author_matches:
                 if art.author and art.author not in seen:
                     suggestions.append({'type': 'author', 'value': art.author})
@@ -242,31 +427,50 @@ def latest_articles():
     articles = Article.query.order_by(Article.publish_datetime.desc().nullslast()).limit(10).all()
     return render_template('latest_articles.html', title='Bài viết mới nhất', articles=articles)
 
-#TuanAnh_update
-# === START: Route cho trang About ===
 @main_bp.route('/about')
 def about():
-    # Bạn có thể truyền thêm dữ liệu vào trang about nếu cần
-    # Ví dụ: Lấy lại thông tin TEAM_INFO_PAGE để hiển thị chi tiết hơn trên trang About
-    # Hoặc một mô tả dài hơn về dự án, công nghệ sử dụng, v.v.
-    about_project_description = """
-        VnExpress Analyzer là một dự án được xây dựng nhằm mục đích học tập và trình diễn khả năng
-        phân tích dữ liệu từ các bài báo trên VnExpress. Ứng dụng cho phép người dùng không chỉ xem
-        nội dung bài viết mà còn cung cấp các phân tích về cảm xúc (sentiment analysis) trong bình luận,
-        các chủ đề chính được thảo luận, và một số thống kê tương tác khác. Dự án sử dụng Python, Flask,
-        PostgreSQL, cùng với các thư viện xử lý ngôn ngữ tự nhiên và scraping dữ liệu.
-    """
-    technologies_used = [
-        "Python", "Flask", "SQLAlchemy", "PostgreSQL",
-        "Tailwind CSS", "JavaScript", "Font Awesome",
-        "NLTK (hoặc thư viện NLP khác)", "BeautifulSoup / Scrapy / Playwright (cho scraping)"
+    technologies = [
+        "Python", "Flask", "SQLAlchemy", "PostgreSQL", "Tailwind CSS", "BeautifulSoup", "Playwright"
     ]
+    page_team_info = {
+        "lecturer": "TS. Nguyễn Thế Bảo",
+        "members": [
+             {
+            "name": "Lê Văn Hoàng", # Thay tên
+            "mssv": "2224802010279", # Thay MSSV
+            "avatar": "images/avatars/1_hoang.jpg", # Đường dẫn đến ảnh trong static/images/avatars/
+            "role": "Project Lead & Backend Developer", # Vai trò
+            "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.", # Mô tả ngắn
+            "google": "2224802010279@student.tdmu.edu.vn", # Link Goole
+            "github": "https://github.com/EurusDFIR" # Link GitHub 
+        },
+        {
+            "name": "Lê Nguyễn Hoàng", 
+            "mssv": "222480201081", 
+            "avatar": "images/avatars/2_nH.png", 
+            "role": "Backend Developer", 
+            "bio": "Đam mê giải quyết các bài toán khó bằng code và dữ liệu.",
+            "google": "2224802010814@student.tdmu.edu.vn", 
+            "github": "https://github.com/CooloBi21" 
+        },
+        {
+            "name": "Nguyễn Tuấn Anh", 
+            "mssv": "2224802010328", 
+            "avatar": "images/avatars/3_tA.png", 
+            "role": "Frontend Developer & UI/UX Designer",
+            "bio": "Yêu thích việc tạo ra những giao diện đẹp mắt và thân thiện với người dùng.",
+            "google": "2224802010328@student.tdmu.edu.vn", 
+            "github": "https://github.com/ALZPotato" 
+        },
+            # Thêm các thành viên khác nếu có
+        ]
+    }
+    project_description = "VnExpress Analyzer là dự án phân tích dữ liệu báo chí hiện đại."
+    return render_template(
+        'about.html',
+        title="Giới Thiệu",
+        technologies=technologies,
+        page_team_info=page_team_info,
+        project_description=project_description
+    )
 
-    return render_template('about.html',
-                           title='Giới Thiệu - VnExpress Analyzer',
-                           project_description=about_project_description,
-                           technologies=technologies_used,
-                           page_team_info=TEAM_INFO_PAGE, # Truyền thông tin đội ngũ vào trang about
-                           current_year=datetime.utcnow().year # Cần thiết nếu about.html không kế thừa base.html có sẵn current_year
-                          )
-# === END: Route cho trang About ===

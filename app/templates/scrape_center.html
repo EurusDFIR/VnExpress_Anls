@@ -1,0 +1,306 @@
+{% extends "layouts/base.html" %} {# This file renders the Scrape Center UI for
+selecting categories to scrape articles from. It uses a Jinja2 macro to
+recursively render the category tree with checkboxes and article count inputs.
+#} {% macro render_category_node(node, level=0) %}
+<li class="ml-{{ level * 4 }} flex items-center space-x-2 py-1 category-node" data-name="{{ node.name|lower }}" tabindex="0">
+  {% if node.children %}
+    <button type="button" class="toggle-btn w-6 h-6 flex items-center justify-center mr-1 text-blue-500 border border-blue-200 rounded focus:outline-none" aria-label="Mở/đóng chuyên mục" tabindex="-1">
+      <span class="toggle-icon">-</span>
+    </button>
+  {% else %}
+    <span class="w-6 h-6 mr-1"></span>
+  {% endif %}
+  <input
+    type="checkbox"
+    name="selected_categories"
+    value="{{ node.id }}"
+    id="cat-{{ node.id }}"
+    class="form-checkbox h-5 w-5 text-blue-600 category-checkbox"
+    tabindex="0"
+  />
+  <label for="cat-{{ node.id }}" class="font-medium text-gray-800 cursor-pointer" tabindex="-1">{{ node.name }}</label>
+  <input
+    type="number"
+    name="count_for_cat_{{ node.id }}"
+    placeholder="Số bài (mặc định 10)"
+    min="1"
+    class="ml-2 w-24 border border-gray-300 rounded p-1 text-sm focus:ring-2 focus:ring-blue-400 article-count-input"
+    tabindex="0"
+    aria-label="Số bài muốn scrape cho {{ node.name }}"
+  />
+  {% if node.article_count is defined %}
+    <span class="text-xs text-gray-500 ml-1" title="Số bài đã có trong DB">({{ node.article_count }})</span>
+  {% endif %}
+  {% if node.children %}
+    <ul class="ml-4 border-l border-gray-200 pl-4 children-list">
+      {% for child_node in node.children %}
+        {{ render_category_node(child_node, level + 1) }}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</li>
+{% endmacro %} {% block content %}
+<div class="container mx-auto px-4 py-8 animate-fade-in">
+  <div class="max-w-3xl mx-auto">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 mb-8">
+      <h1 class="text-3xl font-extrabold text-blue-700 mb-2 flex items-center">
+        <i class="fas fa-layer-group mr-3 text-blue-400"></i> Scrape Center
+      </h1>
+      <p class="text-gray-600 mb-6">Chọn chuyên mục và số lượng bài muốn lấy. Có thể chọn nhiều chuyên mục cùng lúc. Quá trình scrape có thể mất vài phút.</p>
+      <form method="POST" action="{{ url_for('main.start_bulk_scrape') }}" id="scrape-form">
+        <div class="bg-blue-50 rounded-xl p-4 mb-6">
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <button type="button" id="select-all-btn" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold px-3 py-1 rounded shadow-sm text-sm" title="Chọn tất cả chuyên mục">Chọn tất cả</button>
+            <button type="button" id="deselect-all-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-3 py-1 rounded shadow-sm text-sm" title="Bỏ chọn tất cả chuyên mục">Bỏ chọn tất cả</button>
+            <span class="text-xs text-gray-500 ml-2">* Số bài đã có trong DB hiển thị bên cạnh tên chuyên mục.</span>
+          </div>
+          <h3 class="text-xl font-semibold mb-3 text-blue-800 flex items-center"><i class="fas fa-list-ul mr-2"></i>Chuyên mục:</h3>
+          <div class="mb-3 flex items-center gap-2">
+            <input type="text" id="category-search" placeholder="Tìm chuyên mục..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400" autocomplete="off">
+            <button type="button" id="clear-search" class="text-gray-400 hover:text-blue-600 text-lg" title="Xóa tìm kiếm"><i class="fas fa-times-circle"></i></button>
+          </div>
+          <ul class="category-tree space-y-1" id="category-tree-root">
+            {% for root_node in categories_tree %}
+              {{ render_category_node(root_node) }}
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+          <label for="scrape_comments_flag" class="inline-flex items-center cursor-pointer select-none" title="Scrape bình luận sẽ làm chậm quá trình scrape">
+            <input
+              type="checkbox"
+              id="scrape_comments_flag"
+              name="scrape_comments"
+              value="true"
+              class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 transition-all duration-150"
+            />
+            <span class="ml-2 text-blue-900 font-medium flex items-center">
+              <i class="far fa-comments mr-1 text-yellow-400 animate-bounce"></i>
+              Scrape bình luận cho các bài viết này <span class="text-xs text-gray-500 ml-2">(sẽ chậm hơn)</span>
+              <i class="fas fa-info-circle ml-1 text-gray-400" title="Tùy chọn này sẽ làm quá trình scrape chậm hơn nếu bài viết có nhiều bình luận."></i>
+            </span>
+          </label>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-4 items-center">
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center text-lg"
+          >
+            <i class="fas fa-play mr-2"></i> Bắt đầu Scrape
+          </button>
+          <span class="text-sm text-gray-500">* Nếu gặp lỗi, thử lại hoặc kiểm tra kết nối mạng.</span>
+        </div>
+        <div class="mt-4">
+          <div id="scrape-progress-bar" class="w-full h-3 bg-gray-200 rounded hidden">
+            <div class="h-3 bg-blue-500 rounded" style="width:0%"></div>
+          </div>
+          <div id="scrape-log" class="mt-2 text-sm text-gray-700"></div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  // Collapse/Expand chuyên mục
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll('.toggle-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        var li = btn.closest('li');
+        var childrenList = li.querySelector('.children-list');
+        if (childrenList) {
+          if (childrenList.style.display === 'none') {
+            childrenList.style.display = '';
+            btn.querySelector('.toggle-icon').textContent = '-';
+          } else {
+            childrenList.style.display = 'none';
+            btn.querySelector('.toggle-icon').textContent = '+';
+          }
+        }
+      });
+    });
+    // Tìm kiếm chuyên mục
+    var searchInput = document.getElementById('category-search');
+    var clearBtn = document.getElementById('clear-search');
+    var treeRoot = document.getElementById('category-tree-root');
+    function normalize(str) {
+      return str.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    }
+    function filterTree() {
+      var q = normalize(searchInput.value.trim());
+      var nodes = treeRoot.querySelectorAll('.category-node');
+      nodes.forEach(function(node) {
+        var name = normalize(node.getAttribute('data-name'));
+        if (!q || name.includes(q)) {
+          node.style.display = '';
+          node.classList.toggle('bg-yellow-100', !!q && name.includes(q));
+          // Mở các nhánh cha nếu có kết quả
+          var parent = node.parentElement;
+          while (parent && parent !== treeRoot) {
+            if (parent.classList.contains('children-list')) {
+              parent.style.display = '';
+              var parentLi = parent.closest('li');
+              if (parentLi) {
+                var toggle = parentLi.querySelector('.toggle-btn .toggle-icon');
+                if (toggle) toggle.textContent = '-';
+              }
+            }
+            parent = parent.parentElement;
+          }
+        } else {
+          node.style.display = 'none';
+          node.classList.remove('bg-yellow-100');
+        }
+      });
+    }
+    searchInput.addEventListener('input', filterTree);
+    clearBtn.addEventListener('click', function() {
+      searchInput.value = '';
+      filterTree();
+      searchInput.focus();
+    });
+    // Mặc định collapse các nhánh con
+    treeRoot.querySelectorAll('.children-list').forEach(function(ul) {
+      ul.style.display = 'none';
+      var parentLi = ul.closest('li');
+      if (parentLi) {
+        var toggle = parentLi.querySelector('.toggle-btn .toggle-icon');
+        if (toggle) toggle.textContent = '+';
+      }
+    });
+    // Khi tìm kiếm thì mở các nhánh chứa kết quả
+    searchInput.addEventListener('input', function() {
+      if (searchInput.value.trim()) {
+        // Đã xử lý trong filterTree
+      } else {
+        // Nếu xóa tìm kiếm, collapse lại các nhánh con
+        treeRoot.querySelectorAll('.children-list').forEach(function(ul) {
+          ul.style.display = 'none';
+          var parentLi = ul.closest('li');
+          if (parentLi) {
+            var toggle = parentLi.querySelector('.toggle-btn .toggle-icon');
+            if (toggle) toggle.textContent = '+';
+          }
+        });
+      }
+    });
+    // Chọn tất cả / Bỏ chọn tất cả
+    document.getElementById('select-all-btn').onclick = function() {
+      treeRoot.querySelectorAll('.category-checkbox').forEach(cb => {
+        cb.checked = true;
+        // Tự động điền số mặc định nếu chưa có
+        var input = cb.parentElement.querySelector('.article-count-input');
+        if (input && !input.value) input.value = 10;
+      });
+    };
+    document.getElementById('deselect-all-btn').onclick = function() {
+      treeRoot.querySelectorAll('.category-checkbox').forEach(cb => {
+        cb.checked = false;
+        // Xoá số lượng khi bỏ chọn
+        var input = cb.parentElement.querySelector('.article-count-input');
+        if (input) input.value = '';
+      });
+    };
+    // Khi check vào chuyên mục, tự điền số mặc định nếu chưa có
+    treeRoot.querySelectorAll('.category-checkbox').forEach(cb => {
+      cb.addEventListener('change', function() {
+        var input = cb.parentElement.querySelector('.article-count-input');
+        if (cb.checked && input && !input.value) input.value = 10;
+        if (!cb.checked && input) input.value = '';
+        updateTotalCountWarning();
+      });
+    });
+    // Khi nhập số lượng, kiểm tra tổng số bài
+    treeRoot.querySelectorAll('.article-count-input').forEach(inp => {
+      inp.addEventListener('input', updateTotalCountWarning);
+    });
+    function updateTotalCountWarning() {
+      var total = 0;
+      treeRoot.querySelectorAll('.category-checkbox').forEach(cb => {
+        if (cb.checked) {
+          var input = cb.parentElement.querySelector('.article-count-input');
+          var val = parseInt(input && input.value ? input.value : '10');
+          if (!isNaN(val)) total += val;
+        }
+      });
+      var log = document.getElementById('scrape-log');
+      if (total > 100) {
+        log.innerHTML = '<span class="text-red-600 font-semibold">Cảnh báo: Tổng số bài cần scrape lớn (' + total + ' bài)! Quá trình có thể lâu hoặc bị giới hạn.</span>';
+      } else {
+        log.innerHTML = '';
+      }
+    }
+    // Hỗ trợ bàn phím: Space/Enter để check, Tab để di chuyển
+    treeRoot.querySelectorAll('.category-node').forEach(node => {
+      node.addEventListener('keydown', function(e) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          var cb = node.querySelector('.category-checkbox');
+          if (cb) {
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+            e.preventDefault();
+          }
+        }
+      });
+    });
+  });
+  // Checkbox cha-con: check cha thì check hết con, uncheck cha thì bỏ hết con
+  function updateChildrenCheckboxes(parentCheckbox, checked) {
+    var li = parentCheckbox.closest("li");
+    if (!li) return;
+    var ul = li.querySelector(".children-list");
+    if (!ul) return;
+    var childCheckboxes = ul.querySelectorAll('input[type="checkbox"]');
+    childCheckboxes.forEach(function (cb) {
+      cb.checked = checked;
+    });
+  }
+  function updateParentCheckboxes(childCheckbox) {
+    var li = childCheckbox.closest("li");
+    if (!li) return;
+    var parentUl = li.parentElement.closest("ul");
+    if (!parentUl) return;
+    var parentLi = parentUl.closest("li");
+    if (!parentLi) return;
+    var parentCheckbox = parentLi.querySelector('input[type="checkbox"]');
+    if (!parentCheckbox) return;
+    var siblingCheckboxes = parentUl.querySelectorAll('input[type="checkbox"]');
+    var anyChecked = Array.from(siblingCheckboxes).some(function (cb) {
+      return cb.checked;
+    });
+    parentCheckbox.checked = anyChecked;
+    updateParentCheckboxes(parentCheckbox);
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    document
+      .querySelectorAll('.category-tree input[type="checkbox"]')
+      .forEach(function (cb) {
+        cb.addEventListener("change", function (e) {
+          updateChildrenCheckboxes(cb, cb.checked);
+          updateParentCheckboxes(cb);
+        });
+      });
+    // Progress bar giả lập (cần backend hỗ trợ realtime để thực sự động)
+    var form = document.getElementById('scrape-form');
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        var bar = document.getElementById('scrape-progress-bar');
+        var barInner = bar.querySelector('div');
+        var log = document.getElementById('scrape-log');
+        bar.classList.remove('hidden');
+        barInner.style.width = '0%';
+        log.innerHTML = '<span class="text-blue-700">Đang bắt đầu scrape...</span>';
+        var percent = 0;
+        var fakeInterval = setInterval(function() {
+          percent += Math.random() * 20 + 10;
+          if (percent >= 100) {
+            percent = 100;
+            clearInterval(fakeInterval);
+            log.innerHTML = '<span class="text-green-700 font-semibold">Đã gửi yêu cầu scrape. Vui lòng chờ kết quả!</span>';
+          }
+          barInner.style.width = percent + '%';
+        }, 400);
+      });
+    }
+  });
+</script>
+{% endblock %}
