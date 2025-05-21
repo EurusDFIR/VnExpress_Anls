@@ -112,7 +112,7 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
             now = datetime.utcnow()
             if not existing_article.last_scraped_at or (now - existing_article.last_scraped_at).total_seconds() > 3600:
                 existing_article.last_scraped_at = now
-                db_session.commit()
+                db_session.flush()
             print(f"Bài viết đã tồn tại trong DB: {article_url}")
             return existing_article
 
@@ -194,40 +194,37 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
             author=author,
             published_date_str=date_str,
             publish_datetime=publish_datetime_obj,
-            category_id=category_id,  # Sử dụng category_id thay vì category
+            category_id=category_id,
             last_scraped_at=datetime.utcnow(),
             image_url=image_url
         )
+        
         db_session.add(new_article)
-        db_session.flush()  # Ensure the article has an ID
+        db_session.flush()  # Get the ID assigned
         
         if scrape_comments:
             try:
                 num_comments = scrape_and_save_comments(new_article, db_session)
-                if num_comments > 0:
-                    db_session.commit()
-                    print(f"Đã lưu bài viết: {title[:50]}... và {num_comments} bình luận.")
-                else:
-                    db_session.rollback()
-                    print(f"Lỗi khi scrape/lưu bình luận, rollback cả bài viết: {article_url}")
-                    return None
+                if num_comments <= 0:
+                    print(f"Không tìm thấy bình luận cho bài viết: {article_url}")
             except Exception as e:
                 print(f"Lỗi khi scrape comments: {e}")
-                db_session.rollback()
-                return None
-        else:
-            db_session.commit()
-            print(f"Đã lưu bài viết: {title[:50]}...")
+                # Don't return None here as we still want to save the article
         
+        # Make sure the article is loaded in the current session
+        db_session.flush()
+        
+        # Refresh to get the updated comment count
+        db_session.refresh(new_article)
+        
+        print(f"Đã scrape bài viết: {title[:50]}...")
         return new_article
 
     except requests.exceptions.RequestException as e:
         print(f"Lỗi Request khi scrape {article_url}: {e}")
-        db_session.rollback()
         return None
     except Exception as ex:
         print(f"Lỗi không xác định khi scrape và lưu {article_url}: {ex}")
-        db_session.rollback()
         return None
 
 def get_article_urls_from_category_page(category_url, max_articles=10, db_session=None):
@@ -330,8 +327,7 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
             time_tag = comment_element_soup.select_one('span.time-com')
             raw_data['comment_date_str'] = time_tag.get_text(strip=True) if time_tag else None
             list_comment_items_data.append(raw_data)
-            # BỎ LOG DEBUG [PARSE] SAU KHI ĐÃ XÁC NHẬN ĐÚNG
-            # print(f"[PARSE] tag={comment_element_soup.name} class={comment_element_soup.get('class')} comment_api_id={raw_data['comment_api_id']} parent_api_id_on_site={raw_data['parent_api_id_on_site']}")
+
             # Đệ quy: tìm tất cả comment con trong mọi cấp .sub_comment
             sub_comment_divs = comment_element_soup.find_all('div', class_='sub_comment', recursive=False)
             for sub_div in sub_comment_divs:
@@ -351,81 +347,85 @@ def parse_comments_from_html(comment_section_html, article_db_id, db_session):
                     break
         except Exception as e:
             print(f"Lỗi khi parse một comment element: {e}")
+    
     # Parse các comment cha
     top_level_comment_elements = soup.select('#list_comment > div.comment_item')
     for el in top_level_comment_elements:
         process_comment_element(el, parent_api_id_on_site=None)
+    
     saved_count = 0
     api_id_to_db_id_map = {}
     new_comments = []
-    raw_data_to_new_comment = {}
+    
+    # Process existing comments first
+    existing_comments = db_session.query(Comment).filter_by(article_id=article_db_id).all()
+    for comment in existing_comments:
+        if comment.comment_api_id:
+            api_id_to_db_id_map[comment.comment_api_id] = comment.id
+    
+    # Process new comments
     for raw_data in list_comment_items_data:
-        if not raw_data.get('comment_api_id'): continue
-        existing_comment = db_session.query(Comment).filter_by(comment_api_id=raw_data['comment_api_id'], article_id=article_db_id).first()
-        if existing_comment:
-            existing_comment.likes_count = raw_data['likes_count']
-            api_id_to_db_id_map[raw_data['comment_api_id']] = existing_comment.id
+        if not raw_data.get('comment_api_id'):
             continue
+            
+        comment_api_id = raw_data.get('comment_api_id')
+        # Skip if already exists
+        if comment_api_id in api_id_to_db_id_map:
+            continue
+            
         comment_dt = parse_datetime_from_str(raw_data['comment_date_str'])
-        new_cmt = Comment(
+        new_comment = Comment(
             article_id=article_db_id,
-            comment_api_id=raw_data['comment_api_id'],
+            comment_api_id=comment_api_id,
             user_name=raw_data['user_name'],
             comment_text=raw_data['comment_text'],
             comment_date_str=raw_data['comment_date_str'],
             comment_datetime=comment_dt,
             likes_count=raw_data['likes_count']
         )
-        new_comments.append(new_cmt)
-        raw_data_to_new_comment[raw_data['comment_api_id']] = new_cmt
+        new_comments.append(new_comment)
         saved_count += 1
-    try:
-        if new_comments:
-            db_session.bulk_save_objects(new_comments)
-            db_session.flush()
-            # Mapping lại toàn bộ comment_api_id sang id (bao gồm cả comment đã có trong DB)
-            all_db_comments = db_session.query(Comment).filter(Comment.article_id == article_db_id).all()
-            for cmt in all_db_comments:
-                api_id_to_db_id_map[cmt.comment_api_id] = cmt.id
-    except Exception as e_add:
-        print(f"Lỗi khi bulk_save_objects comments: {e_add}")
-        db_session.rollback()
-        return 0
-    # Gán parent_comment_id dựa trên parent_api_id_on_site
-    changed = True
-    loop_count = 0
-    while changed and loop_count < 5:
-        changed = False
-        loop_count += 1
-        for raw_data in list_comment_items_data:
-            current_api_id = raw_data.get('comment_api_id')
-            parent_api_id_on_site = raw_data.get('parent_api_id_on_site')
-            if current_api_id and parent_api_id_on_site and current_api_id in api_id_to_db_id_map and parent_api_id_on_site in api_id_to_db_id_map:
-                comment_to_update = db_session.get(Comment, api_id_to_db_id_map[current_api_id])
-                if comment_to_update and comment_to_update.parent_comment_id != api_id_to_db_id_map[parent_api_id_on_site]:
-                    comment_to_update.parent_comment_id = api_id_to_db_id_map[parent_api_id_on_site]
-                    changed = True
-                    # DEBUG: Gán lại parent_comment_id cho comment
-                    # print(f"[ASSIGN] comment_id={comment_to_update.id} (api_id={current_api_id}) parent_comment_id={api_id_to_db_id_map[parent_api_id_on_site]} (parent_api_id={parent_api_id_on_site})")
-    try:
-        db_session.commit()
-        print(f"Đã lưu/cập nhật {saved_count} bình luận mới vào DB.")
-    except Exception as e_commit:
-        print(f"Lỗi khi commit comments: {e_commit}")
-        db_session.rollback()
-        return 0
+    
+    # Add all comments to session and flush to get IDs
+    if new_comments:
+        for comment in new_comments:
+            db_session.add(comment)
+        db_session.flush()
+        
+        # Update the map with the new comment IDs
+        for comment in new_comments:
+            if comment.comment_api_id:
+                api_id_to_db_id_map[comment.comment_api_id] = comment.id
+    
+    # Process parent-child relationships
+    for raw_data in list_comment_items_data:
+        current_api_id = raw_data.get('comment_api_id')
+        parent_api_id = raw_data.get('parent_api_id_on_site')
+        
+        if current_api_id and parent_api_id and current_api_id in api_id_to_db_id_map and parent_api_id in api_id_to_db_id_map:
+            current_comment_id = api_id_to_db_id_map[current_api_id]
+            parent_comment_id = api_id_to_db_id_map[parent_api_id]
+            
+            # Get the comment object and update its parent
+            comment = db_session.get(Comment, current_comment_id)
+            if comment and comment.parent_comment_id != parent_comment_id:
+                comment.parent_comment_id = parent_comment_id
+    
+    # Return the count of new comments saved
     return saved_count
 
 def scrape_and_save_comments(article_db_object, db_session):
     if not article_db_object or not article_db_object.url:
         print("Đối tượng bài viết không hợp lệ cho scrape comments.")
         return 0
+        
     comment_html_content = fetch_comments_html(
         article_db_object.url,
-        max_load_more_clicks=20,  # tăng số lần click để lấy tối đa
+        max_load_more_clicks=20,
         max_reply_clicks_per_comment=5,
         debug_save=False
     )
+    
     if not comment_html_content:
         print(f"Không lấy được HTML bình luận cho {article_db_object.url}")
         return 0
@@ -435,11 +435,13 @@ def scrape_and_save_comments(article_db_object, db_session):
     if not comment_elements:
         return 0
 
-    # Tạo map để tra cứu comment đã có trong DB, giảm truy vấn lặp lại
+    # Get existing comment IDs to avoid duplicates
     existing_comments = db_session.query(Comment.comment_api_id).filter_by(article_id=article_db_object.id).all()
-    existing_api_ids = set(ec[0] for ec in existing_comments)
+    existing_api_ids = set(ec[0] for ec in existing_comments if ec[0])
 
     new_comments = []
+    api_id_to_comment = {}
+    
     def process_comment_element(el, parent_api_id=None):
         try:
             link_reply = el.find('a', class_='link_reply')
@@ -466,7 +468,8 @@ def scrape_and_save_comments(article_db_object, db_session):
             time_tag = el.select_one('span.time-com')
             comment_date_str = time_tag.get_text(strip=True) if time_tag else None
             comment_dt = parse_datetime_from_str(comment_date_str)
-            new_comments.append(Comment(
+            
+            new_comment = Comment(
                 article_id=article_db_object.id,
                 comment_api_id=comment_api_id,
                 user_name=user_name,
@@ -475,8 +478,13 @@ def scrape_and_save_comments(article_db_object, db_session):
                 comment_datetime=comment_dt,
                 likes_count=likes_count,
                 parent_comment_id=None  # sẽ cập nhật sau nếu cần
-            ))
+            )
+            
+            db_session.add(new_comment)
+            new_comments.append(new_comment)
+            api_id_to_comment[comment_api_id] = new_comment
             existing_api_ids.add(comment_api_id)
+            
             # Xử lý reply (nếu có)
             sub_comment_divs = el.find_all('div', class_='sub_comment', recursive=False)
             for sub_div in sub_comment_divs:
@@ -484,27 +492,38 @@ def scrape_and_save_comments(article_db_object, db_session):
                 for reply_el in reply_elements:
                     process_comment_element(reply_el, parent_api_id=comment_api_id)
         except Exception as e:
-            pass  
+            print(f"Lỗi khi xử lý comment: {e}")
 
+    # Process all comments
     for el in comment_elements:
         process_comment_element(el)
 
+    # Flush to get IDs for all new comments
     if new_comments:
-        db_session.bulk_save_objects(new_comments)
-        try:
-            db_session.commit()
-            print(f"Đã lưu/cập nhật {len(new_comments)} bình luận mới vào DB.")
-        except Exception as e_commit:
-            print(f"Lỗi khi commit comments: {e_commit}")
-            db_session.rollback()
-            return 0
-        article_db_object.total_comment_count = (article_db_object.total_comment_count or 0) + len(new_comments)
-        try:
-            db_session.commit()
-        except Exception as e:
-            db_session.rollback()
-            print(f"Lỗi khi cập nhật total_comment_count: {e}")
+        db_session.flush()
+        
+        # Set parent relationships
+        for comment_api_id, comment in api_id_to_comment.items():
+            parent_links = soup.select(f'a.link_reply[rel="{comment_api_id}"]')
+            for link in parent_links:
+                parent_comment_div = link.find_parent('div', class_=['comment_item', 'sub_comment_item'])
+                if parent_comment_div:
+                    parent_link = parent_comment_div.find('a', class_='link_reply')
+                    if parent_link and parent_link.has_attr('rel'):
+                        parent_api_id = parent_link['rel']
+                        parent_api_id = parent_api_id[0] if isinstance(parent_api_id, list) else parent_api_id
+                        if parent_api_id in api_id_to_comment:
+                            comment.parent_comment_id = api_id_to_comment[parent_api_id].id
+        
+        # Update the total comment count on the article
+        db_session.flush()
+        
+        # Update the article's comment count
+        article_db_object.total_comment_count = db_session.query(Comment).filter_by(article_id=article_db_object.id).count()
+        
+        print(f"Đã xử lý {len(new_comments)} bình luận mới.")
         return len(new_comments)
+    
     return 0
 
 

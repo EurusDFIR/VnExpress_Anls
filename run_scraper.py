@@ -27,8 +27,8 @@ def main_scrape_logic():
                 # Get article URLs for the category
                 article_urls = get_article_urls_from_category_page(
                     category_url,
-                    app,
-                    max_articles=max_articles_per_category
+                    max_articles=max_articles_per_category,
+                    db_session=db.session
                 )
 
                 if not article_urls:
@@ -44,7 +44,6 @@ def main_scrape_logic():
                                 article_object = scrape_article_details_and_save(
                                     url, 
                                     session,
-                                    app,
                                     scrape_comments=True
                                 )
                                 if article_object:

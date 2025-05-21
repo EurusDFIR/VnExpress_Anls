@@ -163,16 +163,36 @@ def start_bulk_scrape():
     
     def scrape_with_app_context(url):
         with app.app_context():
-            session = db.create_scoped_session()
+            session = db.session()  # Create a new session for this thread
             try:
+                # Use the session for this thread
                 article_obj = scrape_article_details_and_save(
                     url, 
                     session, 
                     scrape_comments=scrape_comments_flag
                 )
-                return article_obj
+                
+                if article_obj:
+                    # Get all the data we need from the article while the session is still active
+                    article_data = {
+                        'id': article_obj.id,
+                        'title': article_obj.title,
+                        'url': article_obj.url,
+                        'comment_count': session.query(Comment).filter_by(article_id=article_obj.id).count()
+                    }
+                    # Commit changes
+                    session.commit()
+                    return article_data
+                else:
+                    session.rollback()
+                    return None
+            except Exception as e:
+                # Rollback on error
+                session.rollback()
+                print(f"Error in scrape_with_app_context: {e}")
+                return None
             finally:
-                session.close()
+                session.close()  # Always close the session
 
     # Use a single ThreadPoolExecutor for scraping article details across all categories
     with ThreadPoolExecutor(max_workers=current_app.config.get('SCRAPE_MAX_WORKERS', 5)) as executor:
@@ -208,14 +228,15 @@ def start_bulk_scrape():
             for future in as_completed(future_to_url):
                 url = future_to_url[future]
                 try:
-                    article_obj = future.result()
-                    if article_obj:
+                    article_data = future.result()
+                    if article_data:
                         articles_scraped_this_category += 1
                         total_articles_scraped_session += 1
-                        comments_count = len(article_obj.comments) if article_obj.comments else 0
+                        # Use count() method instead of len() for SQLAlchemy relationships
+                        comments_count = article_data['comment_count']
                         comments_scraped_this_category += comments_count
                         total_comments_scraped_session += comments_count
-                        print(f"[✓] Đã scrape bài viết: {article_obj.title}")
+                        print(f"[✓] Đã scrape bài viết: {article_data['title']}")
                         if comments_count > 0:
                             print(f"    └─ Đã scrape {comments_count} bình luận")
                     else:
