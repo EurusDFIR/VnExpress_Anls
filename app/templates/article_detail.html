@@ -135,20 +135,23 @@ Detail' }}{% endblock %} {% block content %}
         <i class="far fa-smile mr-2"></i> Sentiment Analysis
       </h3>
       {% if sentiment_data and sentiment_data.total_comments > 0 %}
+      <div class="mb-4" style="height: 250px;">
+        <canvas id="sentimentChart"></canvas>
+      </div>
       <p>
-        Positive:
+        Tích cực:
         <span class="font-semibold text-green-600">
           {{ sentiment_data.positive }}%
         </span>
       </p>
       <p>
-        Negative:
+        Tiêu cực:
         <span class="font-semibold text-red-600">
           {{ sentiment_data.negative }}%
         </span>
       </p>
       <p>
-        Neutral:
+        Trung lập:
         <span class="font-semibold text-yellow-600">
           {{ sentiment_data.neutral }}%
         </span>
@@ -156,33 +159,22 @@ Detail' }}{% endblock %} {% block content %}
       <p class="mt-2 text-sm text-gray-600">
         Based on {{ sentiment_data.total_comments }} comments.
       </p>
+      <div class="mt-3">
+        <a href="?analyze=true" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
+          <i class="fas fa-chart-pie mr-2"></i> Analyze Comments
+        </a>
+      </div>
       {% else %}
       <p class="text-gray-500">No sentiment data available yet.</p>
+      <div class="mt-3">
+        <a href="?analyze=true" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
+          <i class="fas fa-chart-pie mr-2"></i> Analyze Comments
+        </a>
+      </div>
       {% endif %}
     </div>
 
-    <!-- Discussion Topics Placeholder -->
-    <div
-      class="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200"
-    >
-      <h3 class="text-xl font-bold text-blue-700 mb-4 flex items-center">
-        <i class="fas fa-comments mr-2"></i> Discussion Topics
-      </h3>
-      {% if discussion_topics %}
-      <ul class="list-disc pl-5">
-        {% for topic in discussion_topics %}
-        <li>
-          <span class="font-semibold text-blue-800">{{ topic.name }}</span> ( {{
-          topic.percentage }}%) -
-          <span class="text-gray-600">Keywords:</span>
-          <span class="text-gray-700"> {{ topic.keywords | join(', ') }} </span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="text-gray-500">No topics identified yet.</p>
-      {% endif %}
-    </div>
+        <!-- Discussion Topics -->    <div      class="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200"    >      <h3 class="text-xl font-bold text-blue-700 mb-4 flex items-center">        <i class="fas fa-comments mr-2"></i> Chủ Đề Thảo Luận      </h3>      {% if discussion_topics %}      <div class="mb-4" style="height: 250px;">        <canvas id="topicChart"></canvas>      </div>      <div class="mt-4 space-y-3">        {% for topic in discussion_topics %}        <div class="bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-all">          <div class="flex justify-between items-center">            <h4 class="font-semibold text-blue-800">{{ topic.name }}</h4>            <span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">{{ topic.percentage }}%</span>          </div>          <div class="mt-1">            <span class="text-sm text-gray-600">Từ khóa:</span>            <div class="flex flex-wrap gap-1 mt-1">              {% for keyword in topic.keywords %}              <span class="bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded-md">{{ keyword }}</span>              {% endfor %}            </div>          </div>        </div>        {% endfor %}      </div>      {% else %}      <div class="text-center py-6">        <p class="text-gray-500 mb-4">Chưa xác định được chủ đề thảo luận.</p>        <a href="?analyze=true" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">          <i class="fas fa-search mr-2"></i> Phân Tích Chủ Đề        </a>      </div>      {% endif %}    </div>
 
     <!-- Interaction Analysis Placeholder -->
     <div
@@ -380,6 +372,166 @@ Detail' }}{% endblock %} {% block content %}
     }
   });
 </script>
+
+<!-- Chart.js library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<!-- Sentiment Chart Data -->
+{% if sentiment_chart_json %}
+<script id="sentiment-chart-data" type="application/json">
+{{ sentiment_chart_json|safe }}
+</script>
+
+<!-- Sentiment Chart Initialization -->
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  // Lấy dữ liệu biểu đồ từ script JSON riêng biệt
+  let sentimentChartData;
+  try {
+    const dataElement = document.getElementById('sentiment-chart-data');
+    sentimentChartData = JSON.parse(dataElement.textContent);
+    console.log("Đã tải dữ liệu biểu đồ cảm xúc:", sentimentChartData);
+  } catch(e) {
+    console.error("Lỗi khi tải dữ liệu biểu đồ cảm xúc:", e);
+  }
+  
+  // Tìm canvas biểu đồ cảm xúc
+  const sentimentCanvas = document.getElementById('sentimentChart');
+  if (sentimentCanvas && sentimentChartData) {
+    // Tạo biểu đồ cảm xúc
+    new Chart(sentimentCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: sentimentChartData.labels,
+        datasets: [{
+          data: sentimentChartData.values,
+          backgroundColor: sentimentChartData.colors,
+          borderColor: 'white',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              font: {
+                size: 12
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const value = context.raw;
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = Math.round((value / total) * 100);
+                return `${context.label}: ${value} (${percentage}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  // Tạo biểu đồ chủ đề
+  const topicCanvas = document.getElementById('topicChart');
+  if (topicCanvas) {
+    // Lấy dữ liệu chủ đề từ HTML
+    const topicData = {
+      labels: [],
+      values: [],
+      colors: []
+    };
+    
+    // Màu ngẫu nhiên cho các chủ đề
+    const topicColors = [
+      '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#f39c12', 
+      '#1abc9c', '#34495e', '#16a085', '#27ae60', '#2980b9',
+      '#8e44ad', '#f1c40f', '#e67e22', '#c0392b', '#d35400'
+    ];
+    
+    // Lấy dữ liệu từ các phần tử HTML
+    const topicElements = document.querySelectorAll('.bg-white.p-3.rounded-lg.shadow-sm');
+    topicElements.forEach((element, index) => {
+      const nameElement = element.querySelector('.font-semibold.text-blue-800');
+      const percentageElement = element.querySelector('.bg-blue-600.text-white');
+      
+      if (nameElement && percentageElement) {
+        const name = nameElement.textContent.trim();
+        // Trích xuất số phần trăm (loại bỏ ký tự %)
+        const percentageText = percentageElement.textContent.trim();
+        const percentage = parseFloat(percentageText.replace('%', ''));
+        
+        if (!isNaN(percentage)) {
+          topicData.labels.push(name);
+          topicData.values.push(percentage);
+          topicData.colors.push(topicColors[index % topicColors.length]);
+        }
+      }
+    });
+    
+    if (topicData.labels.length > 0) {
+      console.log("Dữ liệu biểu đồ chủ đề:", topicData);
+      
+      // Tạo biểu đồ chủ đề
+      new Chart(topicCanvas, {
+        type: 'bar',
+        data: {
+          labels: topicData.labels,
+          datasets: [{
+            label: 'Phân bố chủ đề (%)',
+            data: topicData.values,
+            backgroundColor: topicData.colors,
+            borderColor: 'rgba(255, 255, 255, 0.7)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',  // Biểu đồ ngang
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.parsed.x}%`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              max: 100,
+              title: {
+                display: true,
+                text: 'Phần trăm (%)'
+              }
+            },
+            y: {
+              ticks: {
+                font: {
+                  weight: 'bold'
+                }
+              }
+            }
+          }
+        }
+      });
+    } else {
+      console.log("Không có dữ liệu chủ đề để hiển thị");
+    }
+  }
+});
+</script>
+{% endif %}
 
 <style>
   @keyframes fade-in {

@@ -284,6 +284,9 @@ def index():
 
 @main_bp.route('/article/<int:article_id>')
 def article_detail(article_id):
+    from analysis.sentiment_analyzer import analyze_article_comments, get_comment_sentiment_counts
+    import json
+    
     article = db.session.get(Article, article_id)
     if not article:
         abort(404)
@@ -295,6 +298,12 @@ def article_detail(article_id):
         Article.comments.property.mapper.class_.comment_datetime.asc().nullslast(),
         Article.comments.property.mapper.class_.id.asc()
     ).all()
+    
+    # Analyze comments sentiment if needed
+    run_analysis = request.args.get('analyze', 'false') == 'true'
+    if run_analysis:
+        sentiment_data = analyze_article_comments(article_id, db.session)
+    
     # Build a pure dict tree for template
     comment_dict = {}
     for c in all_comments:
@@ -309,6 +318,7 @@ def article_detail(article_id):
             'sentiment_label': c.sentiment_label,
             'sentiment_score_comment': c.sentiment_score_comment
         }
+    
     tree = []
     for c in all_comments:
         node = comment_dict[c.id]
@@ -316,6 +326,7 @@ def article_detail(article_id):
             comment_dict[c.parent_comment_id]['children'].append(node)
         else:
             tree.append(node)
+    
     # PHÂN TRANG comment gốc (không phải reply)
     page = request.args.get('page', 1, type=int)
     per_page = 10  # Số comment gốc mỗi trang
@@ -325,33 +336,65 @@ def article_detail(article_id):
     paginated_tree = tree[start:end]
     total_pages = (total_root_comments + per_page - 1) // per_page
     total_comments = len(all_comments)
-    # Sentiment statistics
-    sentiment_counter = Counter([c.sentiment_label for c in all_comments if c.sentiment_label])
+    
+    # Get sentiment statistics
+    sentiment_counts = get_comment_sentiment_counts(article_id, db.session)
     sentiment_data = {
-        "positive": round(100 * sentiment_counter.get("Positive", 0) / total_comments, 1) if total_comments else 0,
-        "negative": round(100 * sentiment_counter.get("Negative", 0) / total_comments, 1) if total_comments else 0,
-        "neutral": round(100 * sentiment_counter.get("Neutral", 0) / total_comments, 1) if total_comments else 0,
+        "positive": round(100 * sentiment_counts.get("Positive", 0) / total_comments, 1) if total_comments else 0,
+        "negative": round(100 * sentiment_counts.get("Negative", 0) / total_comments, 1) if total_comments else 0,
+        "neutral": round(100 * sentiment_counts.get("Neutral", 0) / total_comments, 1) if total_comments else 0,
         "total_comments": total_comments
     }
-    mock_discussion_topics = []
-    mock_interaction_data = {
+    
+    # Prepare chart data
+    sentiment_chart_data = {
+        'labels': ['Tích cực', 'Tiêu cực', 'Trung lập'],
+        'values': [
+            sentiment_counts.get("Positive", 0),
+            sentiment_counts.get("Negative", 0),
+            sentiment_counts.get("Neutral", 0)
+        ],
+        'colors': ['#10B981', '#EF4444', '#F59E0B']  # Green, Red, Yellow/Orange
+    }
+    
+    # Convert to JSON for JavaScript
+    sentiment_chart_json = json.dumps(sentiment_chart_data)
+    
+    # Get topic analysis if analyze flag is set
+    from analysis.topic_modeler import analyze_article_topics
+    discussion_topics = []
+    if run_analysis and total_comments > 0:
+        try:
+            topic_analysis = analyze_article_topics(article_id, db.session)
+            if topic_analysis and 'topics' in topic_analysis:
+                discussion_topics = topic_analysis['topics']
+        except Exception as e:
+            print(f"Lỗi khi phân tích chủ đề: {e}")
+    
+    # Interaction data
+    interaction_data = {
         "total_comments": total_comments,
         "original_comments": len([c for c in all_comments if not c.parent_comment_id]),
         "replies": len([c for c in all_comments if c.parent_comment_id]),
         "active_threads": 0,
-        "top_users": [], "most_liked_comment": None
+        "top_users": [],
+        "most_liked_comment": None
     }
-    return render_template('article_detail.html', title=article.title, article=article,
-                           comment_tree=paginated_tree,
-                           comment_pagination={
-                               'page': page,
-                               'per_page': per_page,
-                               'total_pages': total_pages,
-                               'total_root_comments': total_root_comments
-                           },
-                           sentiment_data=sentiment_data,
-                           discussion_topics=mock_discussion_topics,
-                           interaction_data=mock_interaction_data)
+    
+    return render_template('article_detail.html',
+                         title=article.title,
+                         article=article,
+                        comment_tree=paginated_tree,
+                        comment_pagination={
+                            'page': page,
+                            'per_page': per_page,
+                            'total_pages': total_pages,
+                            'total_root_comments': total_root_comments
+                        },
+                        sentiment_data=sentiment_data,
+                        sentiment_chart_json=sentiment_chart_json,
+                        discussion_topics=discussion_topics,
+                        interaction_data=interaction_data)
 
 @main_bp.route('/analyze-new', methods=['POST'])
 def analyze_new_article():

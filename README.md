@@ -44,7 +44,13 @@ python -m playwright install  # Cài Chromium/Firefox/Webkit driver cho Playwrig
 
 - **Yêu cầu Node.js:** Playwright cần Node.js để cài browser driver. Nếu chưa có, tải tại: https://nodejs.org/
 
-### 2.2. File .env mẫu
+### 2.2. Cài đặt NLTK data (bắt buộc cho phân tích chủ đề)
+
+```bash
+python -m analysis.download_nltk_data
+```
+
+### 2.3. File .env mẫu
 
 Tạo file `.env` ở thư mục gốc với nội dung ví dụ:
 
@@ -115,14 +121,69 @@ python run_scraper.py
 python update_article_images.py
 ```
 
-### 7. Các chức năng chính
+## Các chức năng chính
 
 - Tìm kiếm bài viết theo tiêu đề, chuyên mục, tác giả (có gợi ý tự động)
 - Xem chi tiết bài viết, hình ảnh, bình luận (nếu có)
 - Lọc, sắp xếp bài viết theo ngày, chuyên mục, số bình luận
+- Phân tích chủ đề bình luận
+- Phân tích cảm xúc bình luận 
 - Giao diện trực quan, responsive
 
-### 8. Lưu ý
+## Phân tích chủ đề (Topic Modeling)
+
+Module này cung cấp chức năng phân tích chủ đề cho bình luận trong bài viết VnExpress, sử dụng các phương pháp phân tích chủ đề khác nhau.
+
+### Phương pháp phân tích chủ đề
+
+#### 1. Phương pháp từ khóa (Keyword-based)
+
+- Phân tích các bình luận dựa trên từ khóa đã định nghĩa trước
+- Tìm kiếm sự xuất hiện của từ khóa trong bình luận
+- Tạo ra kết quả chủ đề dựa trên tần suất xuất hiện của từ khóa
+
+#### 2. Phương pháp LDA (Latent Dirichlet Allocation)
+
+- Phương pháp phân tích chủ đề không giám sát, dựa trên mô hình xác suất
+- Phân tích sự phân bố từ trong văn bản để tìm ra các nhóm chủ đề
+- Hoạt động hoàn toàn offline và hiệu quả về mặt thời gian
+
+### Cách sử dụng
+
+#### 1. Phân tích chủ đề bài viết
+
+Mô-đun `topic_modeler.py` cung cấp hàm `analyze_article_topics()` để phân tích chủ đề cho bài viết:
+
+```python
+from analysis.topic_modeler import analyze_article_topics
+
+# Phân tích chủ đề cho một bài viết
+topic_analysis = analyze_article_topics(article_id, db_session, num_topics=5)
+
+# In ra các chủ đề
+if topic_analysis and 'topics' in topic_analysis:
+    for topic in topic_analysis['topics']:
+        print(f"Chủ đề: {topic['name']}")
+        print(f"Phần trăm: {topic['percentage']}%")
+        print(f"Từ khóa: {', '.join(topic['keywords'])}")
+        print()
+```
+
+#### 2. Gán chủ đề cho bình luận
+
+Hàm `assign_topics_to_comments()` giúp gán chủ đề cho từng bình luận dựa trên kết quả phân tích:
+
+```python
+from analysis.topic_modeler import fallback_analyze_topics, assign_topics_to_comments
+
+# Phân tích chủ đề
+topics_result = fallback_analyze_topics(comments_data, num_topics=5)
+
+# Gán chủ đề cho các bình luận
+comments_with_topics = assign_topics_to_comments(comments_data, topics_result)
+```
+
+## Lưu ý chung
 
 - Nếu scrape bình luận động, cần cài Chrome/Chromium hoặc Firefox/Webkit (Playwright sẽ tự động cài khi chạy lệnh trên).
 - Nếu dùng Selenium fallback, ChromeDriver sẽ được tự động cài qua webdriver-manager.
@@ -131,9 +192,8 @@ python update_article_images.py
   ```
   python -m playwright install
   ```
-- Có thể cần chỉnh sửa `requirements.txt` nếu môi trường đặc biệt.
 
-### Demo
+## Demo
 
 #### Trang chủ
 
