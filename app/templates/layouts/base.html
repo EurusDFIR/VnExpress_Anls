@@ -22,7 +22,13 @@
       #}
     />
     <style>
-     
+      /* Sticky header styles */
+      .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
 
       #suggestions-box {
         background: #f8fafc; /* Tailwind slate-50 */
@@ -41,7 +47,7 @@
   </head>
   <body class="bg-gray-100 text-gray-800 font-sans">
     <!-- Header/Navbar -->
-    <header class="bg-blue-700 text-white shadow-md">
+    <header class="bg-blue-700 text-white shadow-md sticky-header">
       <nav
         class="container mx-auto px-4 py-3 flex justify-between items-center"
       >
@@ -73,46 +79,54 @@
               <i class="fas fa-info-circle mr-2"></i>Giới Thiệu
             </a>
           </div>
-          <div class="w-full md:w-1/3 flex justify-end">
-            <form
-              method="GET"
-              action="{{ url_for('main.index') }}"
-              class="relative flex w-full md:w-auto"
-              autocomplete="off"
-            >
-              <input
-                type="search"
-                name="q"
-                id="search-input"
-                value="{{ request.args.get('q', '') }}"
-                placeholder="Search articles..."
-                class="w-full md:w-64 bg-white text-gray-800 placeholder-gray-400 rounded-full py-2 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-400 border border-gray-300 shadow-sm"
-                oninput="showSuggestions(this.value)"
-                autocomplete="off"
-              />
-              <button
-                type="submit"
-                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-600 hover:text-blue-800"
-              >
-                <i class="fas fa-search"></i>
-              </button>
-              <div
-                id="suggestions-box"
-                class="absolute left-0 right-0 top-full w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 hidden"
-              ></div>
-            </form>
-          </div>
-          <div class="md:hidden">
-            <button
-              id="mobile-menu-button"
-              class="text-white focus:outline-none"
-            >
-              <i class="fas fa-bars fa-lg"></i>
+          
+          <!-- Notification Button -->
+          <div class="relative" id="notification-container">
+            <button id="notification-btn" class="text-white hover:text-yellow-300 transition px-2 py-1 relative">
+              <i class="fas fa-bell text-xl"></i>
+              <span id="notification-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center hidden">0</span>
             </button>
+            
+            <!-- Notification Pane -->
+            <div id="notification-pane" class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg z-50 overflow-hidden transform transition-all duration-300 scale-95 opacity-0 pointer-events-none">
+              <div class="bg-blue-600 text-white px-4 py-2 flex justify-between items-center">
+                <h3 class="font-semibold">Thông báo</h3>
+                <div>
+                  <button id="clear-notifications" class="text-xs text-blue-200 hover:text-white px-2 py-1 rounded">
+                    <i class="fas fa-trash-alt mr-1"></i>Xóa tất cả
+                  </button>
+                </div>
+              </div>
+              <div id="notification-list" class="max-h-80 overflow-y-auto px-1 py-1">
+                <div class="flex justify-center items-center py-6 text-gray-500">
+                  <span>Chưa có thông báo nào</span>
+                </div>
+              </div>
+            </div>
           </div>
+          
+          <!-- Mobile Menu Button -->
+          <button
+            id="mobile-menu-button"
+            class="md:hidden text-white focus:outline-none"
+          >
+            <svg
+              class="w-6 h-6"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
         </div>
       </nav>
-      <!-- Mobile Menu (ẩn mặc định) -->
       <div id="mobile-menu" class="md:hidden hidden bg-blue-800/90 backdrop-blur-sm">
         <div class="container mx-auto px-6 py-3 space-y-2">
           <a href="{{ url_for('main.index') }}" class="block py-2 px-4 text-sm hover:bg-blue-700 rounded-lg transition-colors">
@@ -128,17 +142,15 @@
       </div>
     </header>
 
-    <!-- Flash Messages -->
-    <div class="container mx-auto px-4 mt-4">
-      {% with messages = get_flashed_messages(with_categories=true) %} {% if
-      messages %} {% for category, message in messages %}
-      <div
-        class="p-4 mb-4 text-sm rounded-lg {% if category == 'danger' %} bg-red-100 text-red-700 {% elif category == 'success' %} bg-green-100 text-green-700 {% elif category == 'warning' %} bg-yellow-100 text-yellow-700 {% else %} bg-blue-100 text-blue-700 {% endif %}"
-        role="alert"
-      >
-        {{ message }}
-      </div>
-      {% endfor %} {% endif %} {% endwith %}
+    <!-- Hidden Flash Messages Container -->
+    <div id="flash-messages-container" class="hidden">
+      {% with messages = get_flashed_messages(with_categories=true) %} 
+        {% if messages %} 
+          {% for category, message in messages %}
+            <div data-category="{{ category }}" data-message="{{ message }}"></div>
+          {% endfor %} 
+        {% endif %} 
+      {% endwith %}
     </div>
 
     <!-- Main Content Block -->
@@ -166,83 +178,190 @@
           mobileMenu.classList.toggle("hidden");
         });
       }
-
-      async function showSuggestions(query) {
-        const box = document.getElementById("suggestions-box");
-        if (!query || query.length < 2) {
-          box.classList.add("hidden");
-          box.innerHTML = "";
-          return;
-        }
-        try {
-          const resp = await fetch(
-            `/search-suggest?q=${encodeURIComponent(query)}`
-          );
-          if (!resp.ok) throw new Error("Network error");
-          const data = await resp.json();
-          if (data.suggestions && data.suggestions.length > 0) {
-            const keywords = data.keywords || [];
-            box.innerHTML = data.suggestions
-              .map((s) => {
-                // Chỉ loại bỏ ký tự xuống dòng, tab, giữ nguyên dấu cách hợp lệ
-                let label = s.value.replace(/[\n\r\t]+/g, " ").trim();
-                // Highlight keyword
-                keywords.forEach((kw) => {
-                  if (kw.length > 0) {
-                    const re = new RegExp(
-                      `(${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-                      "gi"
-                    );
-                    label = label.replace(
-                      re,
-                      '<span class="font-bold text-blue-600">$1</span>'
-                    );
-                  }
-                });
-                let icon = "";
-                if (s.type === "category")
-                  icon = '<i class="fas fa-tag text-yellow-500 mr-2"></i>';
-                if (s.type === "author")
-                  icon = '<i class="fas fa-user text-green-600 mr-2"></i>';
-                return `<div class='px-4 py-2 hover:bg-blue-100 cursor-pointer flex items-center whitespace-nowrap overflow-hidden truncate w-full' onclick=\"document.getElementById('search-input').value='${s.value
-                  .replace(/'/g, "\\'")
-                  .replace(/[\n\r\t]+/g, " ")
-                  .trim()}'; document.querySelector('form[method=GET]').submit();\">${icon}${label}</div>`;
-              })
-              .join("");
-            box.classList.remove("hidden");
+      
+      // Notification System
+      document.addEventListener("DOMContentLoaded", function() {
+        const notificationBtn = document.getElementById('notification-btn');
+        const notificationPane = document.getElementById('notification-pane');
+        const notificationList = document.getElementById('notification-list');
+        const notificationCount = document.getElementById('notification-count');
+        const clearNotificationsBtn = document.getElementById('clear-notifications');
+        
+        // Notifications array to store all notifications
+        let notifications = JSON.parse(localStorage.getItem('vnexpress_notifications') || '[]');
+        
+        // Show/hide notification pane when clicking the button
+        notificationBtn.addEventListener('click', function() {
+          const isVisible = !notificationPane.classList.contains('pointer-events-none');
+          if (isVisible) {
+            hideNotificationPane();
           } else {
-            box.classList.add("hidden");
-            box.innerHTML = "";
+            showNotificationPane();
           }
-        } catch (e) {
-          box.classList.add("hidden");
-          box.innerHTML = "";
+        });
+        
+        // Close notification pane when clicking outside
+        document.addEventListener('click', function(event) {
+          const container = document.getElementById('notification-container');
+          if (container && !container.contains(event.target)) {
+            hideNotificationPane();
+          }
+        });
+        
+        // Clear all notifications
+        clearNotificationsBtn.addEventListener('click', function() {
+          notifications = [];
+          saveNotifications();
+          renderNotifications();
+        });
+        
+        function showNotificationPane() {
+          notificationPane.classList.remove('pointer-events-none', 'scale-95', 'opacity-0');
+          notificationPane.classList.add('scale-100', 'opacity-100');
         }
-      }
-      // Hide suggestions when clicking outside
-      document.addEventListener("click", function (e) {
-        const box = document.getElementById("suggestions-box");
-        if (!box.contains(e.target) && e.target.id !== "search-input") {
-          box.classList.add("hidden");
+        
+        function hideNotificationPane() {
+          notificationPane.classList.add('pointer-events-none', 'scale-95', 'opacity-0');
+          notificationPane.classList.remove('scale-100', 'opacity-100');
         }
-      });
-
-      // Update DateTime
-      function updateDateTime() {
-        const now = new Date();
-        document.getElementById("current-datetime").textContent =
-          now.toLocaleString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
+        
+        function saveNotifications() {
+          localStorage.setItem('vnexpress_notifications', JSON.stringify(notifications));
+          updateNotificationCount();
+        }
+        
+        function updateNotificationCount() {
+          if (notifications.length > 0) {
+            notificationCount.textContent = notifications.length > 99 ? '99+' : notifications.length;
+            notificationCount.classList.remove('hidden');
+          } else {
+            notificationCount.classList.add('hidden');
+          }
+        }
+        
+        function addNotification(message, category = 'info') {
+          const timestamp = new Date().toISOString();
+          notifications.unshift({
+            id: Date.now(),
+            message,
+            category,
+            timestamp
           });
-      }
-      setInterval(updateDateTime, 1000);
-      updateDateTime();
+          
+          // Limit to 50 notifications
+          if (notifications.length > 50) {
+            notifications.pop();
+          }
+          
+          saveNotifications();
+          renderNotifications();
+        }
+        
+        function renderNotifications() {
+          if (notifications.length === 0) {
+            notificationList.innerHTML = `
+              <div class="flex justify-center items-center py-6 text-gray-500">
+                <span>Chưa có thông báo nào</span>
+              </div>
+            `;
+            return;
+          }
+          
+          notificationList.innerHTML = '';
+          
+          notifications.forEach(notification => {
+            const notificationTime = new Date(notification.timestamp);
+            const timeString = notificationTime.toLocaleString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              day: '2-digit',
+              month: '2-digit'
+            });
+            
+            const bgColorClass = 
+              notification.category === 'success' ? 'bg-green-50' :
+              notification.category === 'danger' ? 'bg-red-50' :
+              notification.category === 'warning' ? 'bg-yellow-50' : 'bg-blue-50';
+              
+            const textColorClass = 
+              notification.category === 'success' ? 'text-green-700' :
+              notification.category === 'danger' ? 'text-red-700' :
+              notification.category === 'warning' ? 'text-yellow-700' : 'text-blue-700';
+              
+            const iconClass = 
+              notification.category === 'success' ? 'fa-check-circle text-green-500' :
+              notification.category === 'danger' ? 'fa-exclamation-circle text-red-500' :
+              notification.category === 'warning' ? 'fa-exclamation-triangle text-yellow-500' : 'fa-info-circle text-blue-500';
+            
+            const notificationEl = document.createElement('div');
+            notificationEl.className = `p-3 mb-1 rounded-lg ${bgColorClass} relative group`;
+            notificationEl.innerHTML = `
+              <div class="flex">
+                <div class="flex-shrink-0 mr-2">
+                  <i class="fas ${iconClass}"></i>
+                </div>
+                <div class="flex-1 ${textColorClass} text-sm">
+                  ${notification.message}
+                  <div class="text-xs text-gray-500 mt-1">${timeString}</div>
+                </div>
+                <button class="delete-notification opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-gray-600" data-id="${notification.id}">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            `;
+            
+            notificationList.appendChild(notificationEl);
+          });
+          
+          // Add event listeners to delete buttons
+          document.querySelectorAll('.delete-notification').forEach(button => {
+            button.addEventListener('click', function(e) {
+              const id = parseInt(this.getAttribute('data-id'));
+              notifications = notifications.filter(n => n.id !== id);
+              saveNotifications();
+              renderNotifications();
+              e.stopPropagation();
+            });
+          });
+        }
+        
+        // Process flash messages
+        const flashMessagesContainer = document.getElementById('flash-messages-container');
+        if (flashMessagesContainer) {
+          const flashMessages = flashMessagesContainer.querySelectorAll('div');
+          flashMessages.forEach(message => {
+            const category = message.getAttribute('data-category');
+            const text = message.getAttribute('data-message');
+            if (text) {
+              addNotification(text, category);
+            }
+          });
+        }
+        
+        // Initial rendering
+        renderNotifications();
+        updateNotificationCount();
+        
+        // Setup current datetime display
+        const datetimeDisplay = document.getElementById('current-datetime');
+        if (datetimeDisplay) {
+          function updateDateTime() {
+            const now = new Date();
+            datetimeDisplay.textContent = now.toLocaleString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            });
+          }
+          updateDateTime();
+          setInterval(updateDateTime, 60000); // Update every minute
+        }
+        
+        // Global function to add notifications from other scripts
+        window.addNotification = addNotification;
+      });
     </script>
   </body>
 </html>

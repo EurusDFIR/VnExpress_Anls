@@ -20,10 +20,7 @@ scipy>=1.7.1
 scikit-learn>=1.0
 gensim>=4.1.2
 joblib>=1.1.0
-
-# Tiếng Việt processing
-underthesea>=1.3.3
+tqdm>=4.64.0
 
 # Visualization
-matplotlib>=3.4.3
 plotly>=5.3.1

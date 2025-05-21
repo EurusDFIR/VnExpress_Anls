@@ -100,9 +100,34 @@ recursively render the category tree with checkboxes and article count inputs.
     </div>
   </div>
 </div>
+
+<!-- Status messages container - hidden, used by JS -->
+<div id="status-messages-container" class="hidden">
+  {% if scrape_status %}
+    <div data-status="{{ scrape_status }}" data-message="{{ scrape_message }}"></div>
+  {% endif %}
+</div>
+
 <script>
   // Collapse/Expand chuyên mục
   document.addEventListener("DOMContentLoaded", function () {
+    // Process any existing status messages from container
+    var statusContainer = document.getElementById("status-messages-container");
+    if (statusContainer && window.addNotification) {
+      var statusMessages = statusContainer.querySelectorAll("div");
+      statusMessages.forEach(function(message) {
+        var status = message.getAttribute("data-status");
+        var text = message.getAttribute("data-message");
+        if (text) {
+          var category = "info";
+          if (status === "success") category = "success";
+          if (status === "error") category = "danger";
+          if (status === "warning") category = "warning";
+          window.addNotification(text, category);
+        }
+      });
+    }
+    
     document.querySelectorAll('.toggle-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         var li = btn.closest('li');
@@ -225,6 +250,11 @@ recursively render the category tree with checkboxes and article count inputs.
       var log = document.getElementById('scrape-log');
       if (total > 100) {
         log.innerHTML = '<span class="text-red-600 font-semibold">Cảnh báo: Tổng số bài cần scrape lớn (' + total + ' bài)! Quá trình có thể lâu hoặc bị giới hạn.</span>';
+        
+        // Add as notification
+        if(window.addNotification) {
+          window.addNotification('Cảnh báo: Tổng số bài cần scrape lớn (' + total + ' bài)! Quá trình có thể lâu hoặc bị giới hạn.', 'warning');
+        }
       } else {
         log.innerHTML = '';
       }
@@ -279,26 +309,63 @@ recursively render the category tree with checkboxes and article count inputs.
           updateParentCheckboxes(cb);
         });
       });
-    // Progress bar giả lập (cần backend hỗ trợ realtime để thực sự động)
+    // Progress bar giả lập và hệ thống thông báo
     var form = document.getElementById('scrape-form');
     if (form) {
       form.addEventListener('submit', function(e) {
         var bar = document.getElementById('scrape-progress-bar');
         var barInner = bar.querySelector('div');
         var log = document.getElementById('scrape-log');
+        
+        // Show the progress bar
         bar.classList.remove('hidden');
         barInner.style.width = '0%';
         log.innerHTML = '<span class="text-blue-700">Đang bắt đầu scrape...</span>';
+        
+        // Add initial notification
+        if(window.addNotification) {
+          window.addNotification('Bắt đầu quá trình scrape. Việc này có thể mất vài phút...', 'info');
+        }
+        
+        // Count selected categories for status messages
+        var selectedCategories = [];
+        document.querySelectorAll('.category-checkbox:checked').forEach(function(cb) {
+          var label = cb.parentElement.querySelector('label');
+          if (label) {
+            selectedCategories.push(label.textContent.trim());
+          }
+        });
+        
+        // Simulate progress updates with notifications
         var percent = 0;
         var fakeInterval = setInterval(function() {
-          percent += Math.random() * 20 + 10;
+          percent += Math.random() * 15 + 5;
+          
+          if (percent < 30) {
+            if(window.addNotification && selectedCategories.length > 0) {
+              var randomIndex = Math.floor(Math.random() * selectedCategories.length);
+              window.addNotification('Đang xử lý chuyên mục: ' + selectedCategories[randomIndex], 'info');
+            }
+          } 
+          else if (percent < 60) {
+            if(window.addNotification && selectedCategories.length > 0) {
+              var randomIndex = Math.floor(Math.random() * selectedCategories.length);
+              window.addNotification('Đang xử lý dữ liệu cho chuyên mục: ' + selectedCategories[randomIndex], 'info');
+            }
+          }
+          
           if (percent >= 100) {
             percent = 100;
             clearInterval(fakeInterval);
             log.innerHTML = '<span class="text-green-700 font-semibold">Đã gửi yêu cầu scrape. Vui lòng chờ kết quả!</span>';
+            
+            if(window.addNotification) {
+              window.addNotification('Đã gửi yêu cầu scrape. Vui lòng chờ kết quả!', 'success');
+            }
           }
+          
           barInner.style.width = percent + '%';
-        }, 400);
+        }, 700);
       });
     }
   });

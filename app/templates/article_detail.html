@@ -38,6 +38,13 @@ Detail' }}{% endblock %} {% block content %}
     </ol>
   </nav>
 
+  <!-- Status messages container - hidden, used by JS -->
+  <div id="status-messages-container" class="hidden">
+    {% if scrape_status %}
+      <div data-status="{{ scrape_status }}" data-message="{{ scrape_message }}"></div>
+    {% endif %}
+  </div>
+
   <!-- Article Header -->
   <div class="mb-8 animate-slide-up">
     {% if article.category and article.category.name %}
@@ -286,20 +293,83 @@ Detail' }}{% endblock %} {% block content %}
           class="px-3 py-1 border border-gray-200 bg-gray-100 text-gray-400 rounded-l-md"
           >&laquo; Trước</span
         >
-        {% endif %} {% for p in range(1, comment_pagination.total_pages + 1) %}
-        {% if p == comment_pagination.page %}
-        <span
-          class="px-3 py-1 border border-blue-400 bg-blue-100 text-blue-700 font-bold"
-          >{{ p }}</span
-        >
+        {% endif %}
+        
+        {# Limit pagination to show only a reasonable number of page links #}
+        {% set left_edge = 1 %}
+        {% set right_edge = 1 %}
+        {% set left_current = 2 %}
+        {% set right_current = 2 %}
+        
+        {% if comment_pagination.total_pages <= 10 %}
+          {# If less than 10 pages, show all #}
+          {% for p in range(1, comment_pagination.total_pages + 1) %}
+            {% if p == comment_pagination.page %}
+              <span class="px-3 py-1 border border-blue-400 bg-blue-100 text-blue-700 font-bold">{{ p }}</span>
+            {% else %}
+              <a href="?page={{ p }}#comments-section" class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
         {% else %}
-        <a
-          href="?page={{ p }}#comments-section"
-          class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50"
-          >{{ p }}</a
-        >
-        {% endif %} {% endfor %} {% if comment_pagination.page <
-        comment_pagination.total_pages %}
+          {# Show limited pages with ellipses #}
+          {% set show_ellipsis_left = false %}
+          {% set show_ellipsis_right = false %}
+          
+          {# Show pages at the left edge #}
+          {% for p in range(1, left_edge + 1) %}
+            {% if p == comment_pagination.page %}
+              <span class="px-3 py-1 border border-blue-400 bg-blue-100 text-blue-700 font-bold">{{ p }}</span>
+            {% else %}
+              <a href="?page={{ p }}#comments-section" class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
+          
+          {# Determine if ellipsis needed on left side #}
+          {% if left_edge + 1 < comment_pagination.page - left_current %}
+            {% set show_ellipsis_left = true %}
+          {% endif %}
+          
+          {# Show ellipsis on left if needed #}
+          {% if show_ellipsis_left %}
+            <span class="px-3 py-1 border border-gray-200 text-gray-400">...</span>
+          {% endif %}
+          
+          {# Show pages around current page #}
+          {% for p in range(
+            [left_edge + 1, comment_pagination.page - left_current]|max, 
+            [comment_pagination.page + right_current, comment_pagination.total_pages - right_edge]|min + 1
+          ) %}
+            {% if p == comment_pagination.page %}
+              <span class="px-3 py-1 border border-blue-400 bg-blue-100 text-blue-700 font-bold">{{ p }}</span>
+            {% else %}
+              <a href="?page={{ p }}#comments-section" class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
+          
+          {# Determine if ellipsis needed on right side #}
+          {% if comment_pagination.page + right_current < comment_pagination.total_pages - right_edge %}
+            {% set show_ellipsis_right = true %}
+          {% endif %}
+          
+          {# Show ellipsis on right if needed #}
+          {% if show_ellipsis_right %}
+            <span class="px-3 py-1 border border-gray-200 text-gray-400">...</span>
+          {% endif %}
+          
+          {# Show pages at the right edge #}
+          {% for p in range(
+            [comment_pagination.total_pages - right_edge + 1, comment_pagination.page + right_current + 1]|max, 
+            comment_pagination.total_pages + 1
+          ) %}
+            {% if p == comment_pagination.page %}
+              <span class="px-3 py-1 border border-blue-400 bg-blue-100 text-blue-700 font-bold">{{ p }}</span>
+            {% else %}
+              <a href="?page={{ p }}#comments-section" class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        
+        {% if comment_pagination.page < comment_pagination.total_pages %}
         <a
           href="?page={{ comment_pagination.page + 1 }}#comments-section"
           class="px-3 py-1 border border-gray-300 bg-white text-gray-700 hover:bg-blue-50 rounded-r-md"
@@ -385,86 +455,82 @@ Detail' }}{% endblock %} {% block content %}
 <!-- Sentiment Chart Initialization -->
 <script type="text/javascript">
 document.addEventListener("DOMContentLoaded", function() {
-  // Lấy dữ liệu biểu đồ từ script JSON riêng biệt
-  let sentimentChartData;
-  try {
-    const dataElement = document.getElementById('sentiment-chart-data');
-    sentimentChartData = JSON.parse(dataElement.textContent);
-    console.log("Đã tải dữ liệu biểu đồ cảm xúc:", sentimentChartData);
-  } catch(e) {
-    console.error("Lỗi khi tải dữ liệu biểu đồ cảm xúc:", e);
-  }
+  // Load and show the chart for sentiment analysis
+  var chartDataElement = document.getElementById('sentiment-chart-data');
+  var sentimentChartData = JSON.parse(chartDataElement.textContent);
   
-  // Tìm canvas biểu đồ cảm xúc
-  const sentimentCanvas = document.getElementById('sentimentChart');
-  if (sentimentCanvas && sentimentChartData) {
-    // Tạo biểu đồ cảm xúc
-    new Chart(sentimentCanvas, {
-      type: 'doughnut',
-      data: {
-        labels: sentimentChartData.labels,
-        datasets: [{
-          data: sentimentChartData.values,
-          backgroundColor: sentimentChartData.colors,
-          borderColor: 'white',
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              font: {
-                size: 12
-              }
+  if (document.getElementById('sentimentChart')) {
+    var sentimentChart = new Chart(
+      document.getElementById('sentimentChart').getContext('2d'),
+      {
+        type: 'doughnut',
+        data: {
+          labels: sentimentChartData.labels,
+          datasets: [
+            {
+              data: sentimentChartData.values,
+              backgroundColor: sentimentChartData.colors,
+              borderWidth: 1
             }
-          },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const value = context.raw;
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const percentage = Math.round((value / total) * 100);
-                return `${context.label}: ${value} (${percentage}%)`;
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                font: {
+                  size: 12
+                }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  var label = context.label || '';
+                  var value = context.raw || 0;
+                  var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                  var percentage = Math.round((value / total) * 100);
+                  return label + ': ' + value + ' (' + percentage + '%)';
+                }
               }
             }
           }
         }
       }
-    });
+    );
   }
   
-  // Tạo biểu đồ chủ đề
-  const topicCanvas = document.getElementById('topicChart');
+  // Create topic chart
+  var topicCanvas = document.getElementById('topicChart');
   if (topicCanvas) {
-    // Lấy dữ liệu chủ đề từ HTML
-    const topicData = {
+    // Extract topic data from HTML
+    var topicData = {
       labels: [],
       values: [],
       colors: []
     };
     
-    // Màu ngẫu nhiên cho các chủ đề
-    const topicColors = [
+    // Random colors for topics
+    var topicColors = [
       '#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#f39c12', 
       '#1abc9c', '#34495e', '#16a085', '#27ae60', '#2980b9',
       '#8e44ad', '#f1c40f', '#e67e22', '#c0392b', '#d35400'
     ];
     
-    // Lấy dữ liệu từ các phần tử HTML
-    const topicElements = document.querySelectorAll('.bg-white.p-3.rounded-lg.shadow-sm');
-    topicElements.forEach((element, index) => {
-      const nameElement = element.querySelector('.font-semibold.text-blue-800');
-      const percentageElement = element.querySelector('.bg-blue-600.text-white');
+    // Extract data from HTML elements
+    var topicElements = document.querySelectorAll('.bg-white.p-3.rounded-lg.shadow-sm');
+    topicElements.forEach(function(element, index) {
+      var nameElement = element.querySelector('.font-semibold.text-blue-800');
+      var percentageElement = element.querySelector('.bg-blue-600.text-white');
       
       if (nameElement && percentageElement) {
-        const name = nameElement.textContent.trim();
-        // Trích xuất số phần trăm (loại bỏ ký tự %)
-        const percentageText = percentageElement.textContent.trim();
-        const percentage = parseFloat(percentageText.replace('%', ''));
+        var name = nameElement.textContent.trim();
+        // Extract percentage (remove % character)
+        var percentageText = percentageElement.textContent.trim();
+        var percentage = parseFloat(percentageText.replace('%', ''));
         
         if (!isNaN(percentage)) {
           topicData.labels.push(name);
@@ -475,10 +541,8 @@ document.addEventListener("DOMContentLoaded", function() {
     });
     
     if (topicData.labels.length > 0) {
-      console.log("Dữ liệu biểu đồ chủ đề:", topicData);
-      
-      // Tạo biểu đồ chủ đề
-      new Chart(topicCanvas, {
+      // Create topic chart
+      var topicChart = new Chart(topicCanvas, {
         type: 'bar',
         data: {
           labels: topicData.labels,
@@ -493,7 +557,7 @@ document.addEventListener("DOMContentLoaded", function() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          indexAxis: 'y',  // Biểu đồ ngang
+          indexAxis: 'y',  // Horizontal bar chart
           plugins: {
             legend: {
               display: false
@@ -501,7 +565,7 @@ document.addEventListener("DOMContentLoaded", function() {
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return `${context.parsed.x}%`;
+                  return context.parsed.x + '%';
                 }
               }
             }
@@ -525,13 +589,33 @@ document.addEventListener("DOMContentLoaded", function() {
           }
         }
       });
-    } else {
-      console.log("Không có dữ liệu chủ đề để hiển thị");
     }
   }
 });
 </script>
 {% endif %}
+
+<!-- Notification processing script -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  // Process notifications
+  var statusContainer = document.getElementById("status-messages-container");
+  if (statusContainer && window.addNotification) {
+    var statusMessages = statusContainer.querySelectorAll("div");
+    statusMessages.forEach(function(message) {
+      var status = message.getAttribute("data-status");
+      var text = message.getAttribute("data-message");
+      if (text) {
+        var category = "info";
+        if (status === "success") category = "success";
+        if (status === "error") category = "danger";
+        if (status === "warning") category = "warning";
+        window.addNotification(text, category);
+      }
+    });
+  }
+});
+</script>
 
 <style>
   @keyframes fade-in {

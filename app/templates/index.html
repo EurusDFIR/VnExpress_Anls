@@ -51,7 +51,7 @@
     </div>
 
     <!-- Filter and Sort Section -->
-    <div class="bg-white p-6 rounded-xl shadow-lg mb-8 animate-fade-in">
+    <div id="filter-section" class="bg-white p-6 rounded-xl shadow-lg mb-8 animate-fade-in sticky-filter">
         <form method="GET" action="{{ url_for('main.index') }}" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
             <input type="hidden" name="q" id="hidden-search-q" value="{{ request.args.get('q', '') }}" />
             <div class="relative">
@@ -96,6 +96,13 @@
         </form>
     </div>
 
+    <!-- Status messages container - hidden, used by JS -->
+    <div id="status-messages-container" class="hidden">
+        {% if scrape_status %}
+            <div data-status="{{ scrape_status }}" data-message="{{ scrape_message }}"></div>
+        {% endif %}
+    </div>
+
     <!-- Latest Analyzed Articles Section -->
     <h2 class="text-3xl font-semibold text-gray-800 mb-6 animate-slide-up">Latest Analyzed Articles</h2>
     {% if articles %}
@@ -127,7 +134,7 @@
                         {% else %}
                             <span class="text-yellow-500 mr-1 animate-bounce"><i class="far fa-meh"></i></span> 
                         {% endif %}
-                        <span>{{ article.total_comments_count or 0 }} <i class="far fa-comments ml-1"></i></span>
+                        <span>{{ article.total_comment_count or 0 }} <i class="far fa-comments ml-1"></i></span>
                     </div>
                     <a href="{{ url_for('main.article_detail', article_id=article.id) }}" class="text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-150">
                         View Analysis <i class="fas fa-arrow-right ml-1"></i>
@@ -203,6 +210,7 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // Form loading spinner display
     var forms = document.querySelectorAll("form[method='POST']");
     forms.forEach(function (form) {
       form.addEventListener("submit", function () {
@@ -210,24 +218,56 @@
       });
     });
   
-  });
+    // Max comments toggle display
+    var cb = document.getElementById("scrape_comments_cb");
+    var box = document.getElementById("max_comments_box");
+    if(cb && box) {
+        cb.addEventListener("change", function() {
+            if(cb.checked) {
+                box.style.display = "block";
+            } else {
+                box.style.display = "none";
+            }
+        });
+    }
 
-  document.addEventListener("DOMContentLoaded", function () {
-      var cb = document.getElementById("scrape_comments_cb");
-      var box = document.getElementById("max_comments_box");
-      if(cb && box) {
-          cb.addEventListener("change", function() {
-              if(cb.checked) {
-                  box.style.display = "block";
-              } else {
-                  box.style.display = "none";
-              }
-          });
-      }
-  });
+    // Process any status messages and add to notification system
+    var statusContainer = document.getElementById("status-messages-container");
+    if (statusContainer) {
+      var statusMessages = statusContainer.querySelectorAll("div");
+      statusMessages.forEach(function(message) {
+        var status = message.getAttribute("data-status");
+        var text = message.getAttribute("data-message");
+        if (text && window.addNotification) {
+          var category = "info";
+          if (status === "success") category = "success";
+          if (status === "error") category = "danger";
+          if (status === "warning") category = "warning";
+          window.addNotification(text, category);
+        }
+      });
+    }
 
-  // Autocomplete + dropdown cho filter by category
-  document.addEventListener("DOMContentLoaded", function () {
+    // Add JavaScript to handle the sticky filter section
+    const filterSection = document.getElementById('filter-section');
+    const headerHeight = document.querySelector('.sticky-header').offsetHeight;
+    
+    if (filterSection) {
+      // Set the top position to be just below the header
+      filterSection.style.top = headerHeight + 'px';
+      
+      const filterSectionTop = filterSection.getBoundingClientRect().top + window.pageYOffset - headerHeight;
+      
+      window.addEventListener('scroll', function() {
+        if (window.pageYOffset > filterSectionTop) {
+          filterSection.classList.add('is-sticky');
+        } else {
+          filterSection.classList.remove('is-sticky');
+        }
+      });
+    }
+
+    // Autocomplete + dropdown cho filter by category
     var input = document.getElementById('category-autocomplete');
     var dropdown = document.getElementById('category-dropdown');
     var options = dropdown.querySelectorAll('.category-option');
@@ -294,6 +334,30 @@
 }
 .animate-slide-up {
   animation: slide-up 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Sticky filter section styles */
+.sticky-filter {
+  position: sticky;
+  /* top value is set dynamically with JavaScript to match header height */
+  z-index: 30;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
+/* Add a subtle indication when the filter is sticky */
+.sticky-filter.is-sticky {
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+  border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+/* Add spacing after the filter to prevent content jump when it becomes sticky */
+.sticky-filter.is-sticky + * {
+  margin-top: 1rem;
 }
 </style>
 {% endblock %}

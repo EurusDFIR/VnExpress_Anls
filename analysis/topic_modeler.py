@@ -325,81 +325,12 @@ def analyze_article_topics(article_id, db_session, num_topics=DEFAULT_NUM_TOPICS
     - Kết quả phân tích chủ đề
     """
     from app.models import Article
+    from analysis.lda_topic_modeler import analyze_article_topics_with_lda
     
-    # Tạo cache key cho article
-    cache_key = f"article_topics_{article_id}_{num_topics}"
-    cache_file = os.path.join(CACHE_DIR, f"{cache_key}.pkl")
-    
-    # Kiểm tra cache nếu không buộc làm mới
-    if not force_refresh and os.path.exists(cache_file):
-        try:
-            with open(cache_file, 'rb') as f:
-                cached_result = pickle.load(f)
-                print(f"Đã tải kết quả phân tích chủ đề cho bài viết {article_id} từ cache")
-                return cached_result
-        except Exception as e:
-            print(f"Lỗi khi đọc cache: {e}")
-    
-    # Lấy bài viết và các bình luận
-    article = db_session.get(Article, article_id)
-    if not article:
-        print(f"Không tìm thấy bài viết với ID {article_id}")
-        return None
-    
-    # Lấy tất cả bình luận
-    comments = article.comments.all()
-    
-    if not comments:
-        print(f"Bài viết {article_id} không có bình luận để phân tích")
-        return None
-    
-    # Chuyển đổi bình luận sang định dạng phù hợp để phân tích
-    comments_data = []
-    for comment in comments:
-        comment_data = {
-            'id': comment.id,
-            'comment_text': comment.comment_text,
-            'user_name': comment.user_name,
-            'likes_count': comment.likes_count,
-            'sentiment_label': comment.sentiment_label
-        }
-        comments_data.append(comment_data)
-    
-    # Phân tích chủ đề bằng phương pháp dự phòng
-    topics_result = fallback_analyze_topics(comments_data, num_topics)
-    
-    if not topics_result:
-        print(f"Không thể phân tích chủ đề cho bài viết {article_id}")
-        return None
-    
-    # Cân bằng phân phối chủ đề
-    if 'topics' in topics_result:
-        topics_result['topics'] = balance_topic_distribution(topics_result['topics'])
-    
-    # Gán chủ đề cho các bình luận
-    comments_with_topics = assign_topics_to_comments(comments_data, topics_result)
-    
-    # Tính phân phối chủ đề
-    topic_distribution = get_topic_distribution(comments_with_topics)
-    
-    # Tạo kết quả cuối cùng
-    final_result = {
-        'article_id': article_id,
-        'num_topics': num_topics,
-        'topics': topics_result.get('topics', []),
-        'topic_distribution': topic_distribution,
-        'comments_with_topics': comments_with_topics,
-        'timestamp': time.time()
-    }
-    
-    # Lưu vào cache
-    with open(cache_file, 'wb') as f:
-        pickle.dump(final_result, f)
-        print(f"Đã lưu kết quả phân tích chủ đề cho bài viết {article_id} vào cache")
-    
-    return final_result
+    # Sử dụng LDA thay vì fallback
+    return analyze_article_topics_with_lda(article_id, db_session, num_topics, force_refresh)
 
-# Hàm chính để phân tích chủ đề - bây giờ chỉ dùng phương pháp dự phòng
+# Hàm chính để phân tích chủ đề - sử dụng LDA thay vì fallback
 def analyze_topics(comments_data, num_topics=DEFAULT_NUM_TOPICS):
     """
     Phân tích chủ đề từ các bình luận 
@@ -411,4 +342,5 @@ def analyze_topics(comments_data, num_topics=DEFAULT_NUM_TOPICS):
     Returns:
     - Dictionary chứa thông tin về các chủ đề
     """
-    return fallback_analyze_topics(comments_data, num_topics)
+    from analysis.lda_topic_modeler import analyze_topics_with_lda
+    return analyze_topics_with_lda(comments_data, num_topics)
