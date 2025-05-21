@@ -15,7 +15,7 @@
 
 ```bash
 # Clone về thư mục của bạn
-https://github.com/your-username/VnExpress_Anls.git
+https://github.com/EurusDFIR/VnExpress_Anls.git
 cd VnExpress_Anls
 ```
 
