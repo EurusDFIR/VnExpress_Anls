@@ -28,6 +28,81 @@
         </div>
     </section>
 
+    <!-- Section 4: Đội Ngũ Phát Triển - Được đưa lên đầu tiên -->
+    {% if page_team_info %}
+    <section class="py-16 md:py-24 bg-slate-50">
+
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12 md:mb-16" data-aos="fade-up" data-aos-duration="700">
+                <i class="fas fa-users-cog fa-3x text-sky-600 mb-4"></i>
+                <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-3 tracking-tight">Đội Ngũ Phát Triển</h2>
+                <p class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
+                    Những thành viên đóng góp trong dự án
+                </p>
+            </div>
+
+            <!-- Thông tin Môn học, Dự án, Nhóm -->
+            <div class="text-center my-10 md:my-12 p-6 bg-white rounded-xl shadow-lg border border-gray-200 max-w-3xl mx-auto" data-aos="fade-up" data-aos-delay="100">
+                <h3 class="text-2xl font-bold text-sky-700 mb-4">Thông Tin Học Phần & Dự Án</h3>
+                <div class="text-md text-gray-700 space-y-2 text-left sm:text-center">
+                    <p><strong><i class="fas fa-book mr-2 text-sky-600"></i>Môn học:</strong> BÁO CÁO TIỂU LUẬN HỌC PHẦN KỸ THUẬT LẬP TRÌNH TRONG PHÂN TÍCH DỮ LIỆU (2+0)_CNTT.CQ.02</p>
+                    <p><strong><i class="fas fa-lightbulb mr-2 text-sky-600"></i>Tên dự án:</strong> VnExpress Analyzer</p>
+                    <p><strong><i class="fas fa-users mr-2 text-sky-600"></i>Nhóm thực hiện:</strong> Nhóm 3</p>
+                </div>
+            </div>
+
+            <!-- Giảng viên -->
+            <div class="text-center mb-12 md:mb-16" data-aos="zoom-in-up" data-aos-duration="700">
+                <h3 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-graduation-cap text-sky-600 mr-2"></i>Giảng Viên Hướng Dẫn
+                </h3>
+                <div class="inline-block bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-sky-200 max-w-lg mx-auto transform transition-all duration-300 hover:shadow-sky-300/40 hover:-translate-y-1">
+                    <p class="text-xl md:text-2xl font-semibold text-sky-700">{{ page_team_info.lecturer }}</p>
+                </div>
+            </div>
+
+            <!-- Thành viên -->
+            {% if page_team_info.members and page_team_info.members|length > 0 %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12">
+                {% for member in page_team_info.members %}
+                <div data-aos="fade-up" data-aos-duration="600" data-aos-delay="{{ loop.index0 * 150 }}">
+                    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col group h-full transform transition-all duration-300 ease-in-out hover:shadow-sky-500/60 hover:-translate-y-2">
+                        <div class="relative h-72 bg-slate-300">
+                            <img src="{{ url_for('static', filename=(member.avatar or 'images/avatars/default_avatar.png')) }}" 
+                                 alt="Ảnh {{ member.name }}" 
+                                 class="w-full h-full object-cover object-center group-hover:scale-105 group-hover:brightness-105 transition-all duration-500 ease-out">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-5 opacity-0 group-hover:opacity-100 transition-opacity duration-400 ease-in-out">
+                                <h3 class="text-2xl font-bold text-white drop-shadow-lg leading-tight translate-y-4 group-hover:translate-y-0 transition-transform duration-300 ease-out">{{ member.name }}</h3>
+                                {% if member.role %}
+                                <p class="text-sm text-sky-300 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out delay-100">{{ member.role }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="p-6 flex-grow flex flex-col text-center">
+                            {% if member.bio %}
+                            <p class="text-gray-700 text-base mb-5 flex-grow italic leading-relaxed">"{{ member.bio }}"</p>
+                            {% else %}
+                            <p class="text-gray-500 text-base mb-5 flex-grow italic leading-relaxed">Thành viên đóng góp cho dự án.</p>
+                            {% endif %}
+                            <div class="border-t border-gray-200 pt-4 mt-auto">
+                                {% if member.mssv %}
+                                <p class="text-sm text-gray-500 mb-3 font-mono">MSSV: {{ member.mssv }}</p>
+                                {% endif %}
+                                <div class="flex space-x-4 justify-center items-center">
+                                    {% if member.google %}<a href="{{ member.google }}" target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-red-500 text-2xl transform hover:scale-125 transition-transform duration-150"><i class="fab fa-google"></i></a>{% endif %}
+                                    {% if member.github %}<a href="{{ member.github }}" target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-gray-900 text-2xl transform hover:scale-125 transition-transform duration-150"><i class="fab fa-github"></i></a>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
     <!-- Section 2: Sứ Mệnh và Tầm Nhìn (Mô tả dự án) -->
     <section class="py-16 md:py-24 bg-white">
         <div class="container mx-auto px-4">
@@ -105,71 +180,6 @@
                 </div>
                 {% endfor %}
             </div>
-        </div>
-    </section>
-    {% endif %}
-
-    <!-- Section 4: Đội Ngũ Phát Triển - NỀN SÁNG -->
-    {% if page_team_info %}
-    <section class="py-16 md:py-24 bg-slate-50">
-        <!-- ... (Nội dung không đổi) ... -->
-        <div class="container mx-auto px-4">
-            <div class="text-center mb-12 md:mb-16" data-aos="fade-up" data-aos-duration="700">
-                <i class="fas fa-users-cog fa-3x text-sky-600 mb-4"></i>
-                <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-3 tracking-tight">Đội Ngũ Phát Triển</h2>
-                <p class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
-                    Những cá nhân tài năng và nhiệt huyết đã cùng nhau tạo nên dự án này.
-                </p>
-            </div>
-
-            <!-- Giảng viên -->
-            <div class="text-center mb-12 md:mb-16" data-aos="zoom-in-up" data-aos-duration="700">
-                <h3 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
-                    <i class="fas fa-graduation-cap text-sky-600 mr-2"></i>Giảng Viên Hướng Dẫn
-                </h3>
-                <div class="inline-block bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-sky-200 max-w-lg mx-auto transform transition-all duration-300 hover:shadow-sky-300/40 hover:-translate-y-1">
-                    <p class="text-xl md:text-2xl font-semibold text-sky-700">{{ page_team_info.lecturer }}</p>
-                </div>
-            </div>
-
-            <!-- Thành viên -->
-            {% if page_team_info.members and page_team_info.members|length > 0 %}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12">
-                {% for member in page_team_info.members %}
-                <div data-aos="fade-up" data-aos-duration="600" data-aos-delay="{{ loop.index0 * 150 }}">
-                    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col group h-full transform transition-all duration-300 ease-in-out hover:shadow-sky-500/60 hover:-translate-y-2">
-                        <div class="relative h-72 bg-slate-300">
-                            <img src="{{ url_for('static', filename=(member.avatar or 'images/avatars/default_avatar.png')) }}" 
-                                 alt="Ảnh {{ member.name }}" 
-                                 class="w-full h-full object-cover object-center group-hover:scale-105 group-hover:brightness-105 transition-all duration-500 ease-out">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-5 opacity-0 group-hover:opacity-100 transition-opacity duration-400 ease-in-out">
-                                <h3 class="text-2xl font-bold text-white drop-shadow-lg leading-tight translate-y-4 group-hover:translate-y-0 transition-transform duration-300 ease-out">{{ member.name }}</h3>
-                                {% if member.role %}
-                                <p class="text-sm text-sky-300 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out delay-100">{{ member.role }}</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="p-6 flex-grow flex flex-col text-center">
-                            {% if member.bio %}
-                            <p class="text-gray-700 text-base mb-5 flex-grow italic leading-relaxed">"{{ member.bio }}"</p>
-                            {% else %}
-                            <p class="text-gray-500 text-base mb-5 flex-grow italic leading-relaxed">Thành viên đóng góp cho dự án.</p>
-                            {% endif %}
-                            <div class="border-t border-gray-200 pt-4 mt-auto">
-                                {% if member.mssv %}
-                                <p class="text-sm text-gray-500 mb-3 font-mono">MSSV: {{ member.mssv }}</p>
-                                {% endif %}
-                                <div class="flex space-x-4 justify-center items-center">
-                                    {% if member.google %}<a href="{{ member.google }}" target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-red-500 text-2xl transform hover:scale-125 transition-transform duration-150"><i class="fab fa-google"></i></a>{% endif %}
-                                    {% if member.github %}<a href="{{ member.github }}" target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-gray-900 text-2xl transform hover:scale-125 transition-transform duration-150"><i class="fab fa-github"></i></a>{% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
         </div>
     </section>
     {% endif %}

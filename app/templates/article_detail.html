@@ -207,9 +207,22 @@ Detail' }}{% endblock %} {% block content %}
   <!-- Comments Section (Tree View) -->
   <div id="comments-section"></div>
   <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in">
-    <h3 class="text-2xl font-bold text-blue-800 mb-6 flex items-center">
-      <i class="far fa-comments mr-2"></i> Comments ({{ comment_tree|length }})
-    </h3>
+    <div class="flex justify-between items-center mb-6">
+      <h3 class="text-2xl font-bold text-blue-800 flex items-center">
+        <i class="far fa-comments mr-2"></i> Comments ({{ comment_tree|length }}/{{ interaction_data.total_comments }})
+      </h3>
+      <a href="?analyze=true#comments-section" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded-lg text-sm">
+        <i class="fas fa-chart-bar mr-1"></i> Analyze Comments
+      </a>
+    </div>
+    
+    <!-- Debug info -->
+    <div class="mb-4 p-2 bg-gray-100 rounded text-sm text-gray-700">
+      <p>Debug: Page {{ comment_pagination.page }} of {{ comment_pagination.total_pages }}</p>
+      <p>Total root comments: {{ comment_pagination.total_root_comments }}</p>
+      <p>Comments per page: {{ comment_pagination.per_page }}</p>
+    </div>
+    
     {% macro render_comment(comment, level=0) %}
     <div
       class="comment-item border-b border-gray-200 pb-4 pl-{{ level*6 }} animate-fade-in"

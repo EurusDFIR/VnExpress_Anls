@@ -218,6 +218,8 @@ def scrape_article_details_and_save(article_url, db_session, scrape_comments=Fal
         db_session.refresh(new_article)
         
         print(f"Đã scrape bài viết: {title[:50]}...")
+        # Thêm lệnh commit để lưu các thay đổi vào database
+        db_session.commit()
         return new_article
 
     except requests.exceptions.RequestException as e:
@@ -469,6 +471,11 @@ def scrape_and_save_comments(article_db_object, db_session):
             comment_date_str = time_tag.get_text(strip=True) if time_tag else None
             comment_dt = parse_datetime_from_str(comment_date_str)
             
+            # Check if this comment is inside a sub_comment div to determine if it's a reply
+            is_reply = False
+            if parent_api_id:
+                is_reply = True
+            
             new_comment = Comment(
                 article_id=article_db_object.id,
                 comment_api_id=comment_api_id,
@@ -477,7 +484,8 @@ def scrape_and_save_comments(article_db_object, db_session):
                 comment_date_str=comment_date_str,
                 comment_datetime=comment_dt,
                 likes_count=likes_count,
-                parent_comment_id=None  # sẽ cập nhật sau nếu cần
+                # Only set parent_comment_id later when all comments are loaded and we can ensure parent exists
+                parent_comment_id=None
             )
             
             db_session.add(new_comment)
@@ -485,11 +493,17 @@ def scrape_and_save_comments(article_db_object, db_session):
             api_id_to_comment[comment_api_id] = new_comment
             existing_api_ids.add(comment_api_id)
             
+            # Store parent info for later processing after all comments are loaded
+            if parent_api_id:
+                # We'll process this relationship later
+                print(f"DEBUG - Comment {comment_api_id} has parent {parent_api_id}")
+            
             # Xử lý reply (nếu có)
             sub_comment_divs = el.find_all('div', class_='sub_comment', recursive=False)
             for sub_div in sub_comment_divs:
                 reply_elements = sub_div.find_all(['div'], class_=['comment_item', 'sub_comment_item'], recursive=False)
                 for reply_el in reply_elements:
+                    # All comments in the sub_comment div are replies to this comment
                     process_comment_element(reply_el, parent_api_id=comment_api_id)
         except Exception as e:
             print(f"Lỗi khi xử lý comment: {e}")
@@ -504,26 +518,84 @@ def scrape_and_save_comments(article_db_object, db_session):
         
         # Set parent relationships
         for comment_api_id, comment in api_id_to_comment.items():
-            parent_links = soup.select(f'a.link_reply[rel="{comment_api_id}"]')
-            for link in parent_links:
-                parent_comment_div = link.find_parent('div', class_=['comment_item', 'sub_comment_item'])
-                if parent_comment_div:
-                    parent_link = parent_comment_div.find('a', class_='link_reply')
-                    if parent_link and parent_link.has_attr('rel'):
-                        parent_api_id = parent_link['rel']
-                        parent_api_id = parent_api_id[0] if isinstance(parent_api_id, list) else parent_api_id
-                        if parent_api_id in api_id_to_comment:
-                            comment.parent_comment_id = api_id_to_comment[parent_api_id].id
+            # Debug parent relationship detection
+            print(f"DEBUG - Processing parent relationship for comment ID {comment_api_id}")
+            
+            # Only process comments that were passed a parent_api_id in process_comment_element
+            if comment.parent_comment_id is None:  # Only set parent if not already set
+                parent_api_id = None
+                
+                # Find this comment's link_reply to get its position in thread
+                comment_link = soup.select_one(f'a.link_reply[rel="{comment_api_id}"]')
+                if comment_link:
+                    # Find the parent container of this comment
+                    comment_div = comment_link.find_parent('div', class_=['comment_item', 'sub_comment_item'])
+                    if comment_div:
+                        # Check if this comment is inside a sub_comment div (making it a reply)
+                        sub_comment_parent = comment_div.find_parent('div', class_='sub_comment')
+                        if sub_comment_parent:
+                            # If it's in a sub_comment div, then it's a reply
+                            # Find the parent comment's link_reply
+                            parent_div = sub_comment_parent.find_parent('div', class_=['comment_item', 'sub_comment_item'])
+                            if parent_div:
+                                parent_link = parent_div.find('a', class_='link_reply')
+                                if parent_link and parent_link.has_attr('rel'):
+                                    parent_api_id = parent_link['rel']
+                                    parent_api_id = parent_api_id[0] if isinstance(parent_api_id, list) else parent_api_id
+                
+                # If we found a parent and it exists in our comment map, set the relationship
+                if parent_api_id and parent_api_id in api_id_to_comment:
+                    comment.parent_comment_id = api_id_to_comment[parent_api_id].id
+                    print(f"DEBUG - Set parent for comment {comment_api_id} to {parent_api_id}")
         
-        # Update the total comment count on the article
-        db_session.flush()
+        # Verify comment tree structure
+        root_comments = 0
+        reply_comments = 0
+        for comment in new_comments:
+            if comment.parent_comment_id is None:
+                root_comments += 1
+            else:
+                reply_comments += 1
+        print(f"DEBUG - Comment tree: {root_comments} root comments, {reply_comments} replies")
         
         # Update the article's comment count
         article_db_object.total_comment_count = db_session.query(Comment).filter_by(article_id=article_db_object.id).count()
         
         print(f"Đã xử lý {len(new_comments)} bình luận mới.")
+        
+        # Debug: Verify all comments and their relationships one more time
+        all_article_comments = db_session.query(Comment).filter_by(article_id=article_db_object.id).all()
+        root_count = len([c for c in all_article_comments if c.parent_comment_id is None])
+        reply_count = len([c for c in all_article_comments if c.parent_comment_id is not None])
+        print(f"DEBUG - FINAL: Total comments: {len(all_article_comments)}, Root comments: {root_count}, Replies: {reply_count}")
+        
+        # Debug: Check for circular references
+        comment_ids = {c.id: c for c in all_article_comments}
+        for comment in all_article_comments:
+            if comment.parent_comment_id is not None:
+                # Make sure the parent exists
+                if comment.parent_comment_id not in comment_ids:
+                    print(f"WARNING: Comment {comment.id} references non-existent parent {comment.parent_comment_id}")
+                # Check for self-referential parent
+                if comment.parent_comment_id == comment.id:
+                    print(f"CRITICAL: Comment {comment.id} references itself as parent! Fixing...")
+                    comment.parent_comment_id = None
+                # Check for circular reference
+                parent_id = comment.parent_comment_id
+                visited = set([comment.id])
+                while parent_id is not None:
+                    if parent_id in visited:
+                        print(f"CRITICAL: Circular reference detected for comment {comment.id}! Fixing...")
+                        comment.parent_comment_id = None
+                        break
+                    visited.add(parent_id)
+                    parent = comment_ids.get(parent_id)
+                    if parent is None:
+                        break
+                    parent_id = parent.parent_comment_id
+        
+        # Thêm lệnh commit để lưu các thay đổi bình luận vào database
+        db_session.commit()
         return len(new_comments)
     
     return 0
-
-

@@ -219,17 +219,17 @@
     });
   
     // Max comments toggle display
-    var cb = document.getElementById("scrape_comments_cb");
-    var box = document.getElementById("max_comments_box");
-    if(cb && box) {
-        cb.addEventListener("change", function() {
-            if(cb.checked) {
-                box.style.display = "block";
-            } else {
-                box.style.display = "none";
-            }
-        });
-    }
+      var cb = document.getElementById("scrape_comments_cb");
+      var box = document.getElementById("max_comments_box");
+      if(cb && box) {
+          cb.addEventListener("change", function() {
+              if(cb.checked) {
+                  box.style.display = "block";
+              } else {
+                  box.style.display = "none";
+              }
+          });
+      }
 
     // Process any status messages and add to notification system
     var statusContainer = document.getElementById("status-messages-container");
@@ -267,7 +267,7 @@
       });
     }
 
-    // Autocomplete + dropdown cho filter by category
+  // Autocomplete + dropdown cho filter by category
     var input = document.getElementById('category-autocomplete');
     var dropdown = document.getElementById('category-dropdown');
     var options = dropdown.querySelectorAll('.category-option');

@@ -352,7 +352,12 @@ def article_detail(article_id):
     article = db.session.get(Article, article_id)
     if not article:
         abort(404)
+    
+    # Thêm log để debug
     real_comment_count = article.comments.count()
+    print(f"DEBUG - Article ID: {article_id}, Title: {article.title}")
+    print(f"DEBUG - Total comments in database: {real_comment_count}")
+    
     if article.total_comment_count != real_comment_count:
         article.total_comment_count = real_comment_count
         db.session.commit()
@@ -360,6 +365,13 @@ def article_detail(article_id):
         Article.comments.property.mapper.class_.comment_datetime.asc().nullslast(),
         Article.comments.property.mapper.class_.id.asc()
     ).all()
+    
+    # Thêm debug cho all_comments
+    print(f"DEBUG - Comments loaded for template: {len(all_comments)}")
+    if all_comments:
+        print(f"DEBUG - First comment: {all_comments[0].comment_text[:50]}...")
+    else:
+        print(f"DEBUG - No comments loaded!")
     
     # Analyze comments sentiment if needed
     run_analysis = request.args.get('analyze', 'false') == 'true'
@@ -389,13 +401,46 @@ def article_detail(article_id):
         else:
             tree.append(node)
     
+    # Debug tree construction
+    print(f"DEBUG - Tree length (root comments): {len(tree)}")
+    if tree:
+        print(f"DEBUG - First root comment: {tree[0]['comment_text'][:50]}...")
+    
     # PHÂN TRANG comment gốc (không phải reply)
     page = request.args.get('page', 1, type=int)
     per_page = 10  # Số comment gốc mỗi trang
     total_root_comments = len(tree)
+    
+    # Đảm bảo page là hợp lệ
+    if total_root_comments > 0:
+        max_pages = (total_root_comments + per_page - 1) // per_page
+        if page < 1:
+            page = 1
+        elif page > max_pages:
+            page = max_pages
+    else:
+        page = 1
+    
+    # Tính start/end cho phân trang
     start = (page - 1) * per_page
-    end = start + per_page
-    paginated_tree = tree[start:end]
+    end = min(start + per_page, total_root_comments)  # Đảm bảo end không vượt quá số lượng bình luận
+    
+    # Xử lý trường hợp đặc biệt nếu start >= total_root_comments
+    if start >= total_root_comments and total_root_comments > 0:
+        page = 1
+        start = 0
+        end = min(per_page, total_root_comments)
+        print(f"DEBUG - Reset to page 1 because start ({start}) >= total_comments ({total_root_comments})")
+    
+    paginated_tree = tree[start:end] if tree else []
+    
+    # Debug paginated tree
+    print(f"DEBUG - Paginated tree (page {page}): {len(paginated_tree)} comments")
+    if paginated_tree:
+        print(f"DEBUG - First paginated comment: {paginated_tree[0]['comment_text'][:50]}...")
+    elif tree:
+        print(f"DEBUG - WARNING: Paginated tree is empty but tree has {len(tree)} items!")
+    
     total_pages = (total_root_comments + per_page - 1) // per_page
     total_comments = len(all_comments)
     

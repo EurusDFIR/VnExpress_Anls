@@ -159,7 +159,7 @@ def tokenize_text(text):
     """
     if not text:
         return []
-    
+        
     # Tách từ đơn giản bằng khoảng trắng vì không có underthesea
     words = text.split()
     
@@ -505,7 +505,7 @@ def assign_topic_names(topics):
         new_topic['name'] = suggested_name
         used_topic_names.add(suggested_name)
         assigned_topics.append(new_topic)
-    
+            
     # Trả lại danh sách topics đã được gán tên theo thứ tự ban đầu
     result = []
     topic_id_to_assigned = {topic['id']: topic for topic in assigned_topics}

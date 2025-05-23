@@ -68,6 +68,28 @@
             <i class="far fa-clock mr-2"></i>
             <span id="current-datetime"></span>
           </div>
+
+          <!-- Search Bar -->
+          <div class="hidden md:block relative mr-6 flex-grow max-w-md">
+            <form action="{{ url_for('main.index') }}" method="GET" class="relative">
+              <input 
+                type="text" 
+                name="q" 
+                id="search-input" 
+                placeholder="Tìm kiếm bài viết..." 
+                value="{{ request.args.get('q', '') }}"
+                class="w-full py-2 pl-10 pr-4 rounded-full bg-blue-600 text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all duration-200"
+              >
+              <button type="submit" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-200">
+                <i class="fas fa-search"></i>
+              </button>
+            </form>
+            <!-- Suggestions dropdown will appear here -->
+            <div id="suggestions-box" class="absolute w-full rounded-lg mt-2 shadow-lg overflow-hidden hidden">
+              <!-- Suggestions will be populated by JavaScript -->
+            </div>
+          </div>
+          
           <div class="hidden md:flex space-x-8">
             <a href="{{ url_for('main.index') }}" class="nav-link text-white hover:text-yellow-300">
               <i class="fas fa-home mr-2"></i>Home
@@ -94,7 +116,7 @@
                 <div>
                   <button id="clear-notifications" class="text-xs text-blue-200 hover:text-white px-2 py-1 rounded">
                     <i class="fas fa-trash-alt mr-1"></i>Xóa tất cả
-                  </button>
+              </button>
                 </div>
               </div>
               <div id="notification-list" class="max-h-80 overflow-y-auto px-1 py-1">
@@ -106,10 +128,10 @@
           </div>
           
           <!-- Mobile Menu Button -->
-          <button
-            id="mobile-menu-button"
+            <button
+              id="mobile-menu-button"
             class="md:hidden text-white focus:outline-none"
-          >
+            >
             <svg
               class="w-6 h-6"
               xmlns="http://www.w3.org/2000/svg"
@@ -124,7 +146,7 @@
                 d="M4 6h16M4 12h16M4 18h16"
               />
             </svg>
-          </button>
+            </button>
         </div>
       </nav>
       <div id="mobile-menu" class="md:hidden hidden bg-blue-800/90 backdrop-blur-sm">
@@ -178,7 +200,7 @@
           mobileMenu.classList.toggle("hidden");
         });
       }
-      
+
       // Notification System
       document.addEventListener("DOMContentLoaded", function() {
         const notificationBtn = document.getElementById('notification-btn');
@@ -205,8 +227,8 @@
           const container = document.getElementById('notification-container');
           if (container && !container.contains(event.target)) {
             hideNotificationPane();
-          }
-        });
+                  }
+                });
         
         // Clear all notifications
         clearNotificationsBtn.addEventListener('click', function() {
@@ -341,26 +363,131 @@
         // Initial rendering
         renderNotifications();
         updateNotificationCount();
-        
+
         // Setup current datetime display
         const datetimeDisplay = document.getElementById('current-datetime');
         if (datetimeDisplay) {
-          function updateDateTime() {
-            const now = new Date();
+      function updateDateTime() {
+        const now = new Date();
             datetimeDisplay.textContent = now.toLocaleString('vi-VN', {
               hour: '2-digit',
               minute: '2-digit',
               day: '2-digit',
               month: '2-digit',
               year: 'numeric'
-            });
-          }
-          updateDateTime();
+          });
+      }
+      updateDateTime();
           setInterval(updateDateTime, 60000); // Update every minute
         }
         
         // Global function to add notifications from other scripts
         window.addNotification = addNotification;
+      });
+
+      // Search Suggestions
+      document.addEventListener("DOMContentLoaded", function() {
+        const searchInput = document.getElementById('search-input');
+        const suggestionsBox = document.getElementById('suggestions-box');
+        
+        if (searchInput && suggestionsBox) {
+          // Debounce function to limit API calls
+          function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+              clearTimeout(timeout);
+              timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+          }
+          
+          // Function to fetch search suggestions
+          const fetchSuggestions = debounce(async (query) => {
+            if (query.length < 2) {
+              suggestionsBox.classList.add('hidden');
+              return;
+            }
+            
+            try {
+              const response = await fetch(`/search-suggest?q=${encodeURIComponent(query)}`);
+              if (!response.ok) throw new Error('Network response was not ok');
+              
+              const data = await response.json();
+              displaySuggestions(data.suggestions);
+            } catch (error) {
+              console.error("Error fetching suggestions:", error);
+            }
+          }, 300);
+          
+          // Function to display suggestions
+          function displaySuggestions(suggestions) {
+            if (!suggestions || suggestions.length === 0) {
+              suggestionsBox.classList.add('hidden');
+              return;
+            }
+            
+            suggestionsBox.innerHTML = '';
+            
+            suggestions.forEach(suggestion => {
+              const item = document.createElement('div');
+              item.className = 'px-4 py-2 cursor-pointer hover:bg-blue-100';
+              
+              let iconClass = 'far fa-newspaper';
+              if (suggestion.type === 'category') iconClass = 'fas fa-folder';
+              if (suggestion.type === 'author') iconClass = 'fas fa-user-edit';
+              
+              item.innerHTML = `<i class="${iconClass} mr-2 text-blue-600"></i> ${suggestion.value}`;
+              
+              item.addEventListener('click', function() {
+                searchInput.value = suggestion.value;
+                searchInput.form.submit();
+              });
+              
+              suggestionsBox.appendChild(item);
+            });
+            
+            suggestionsBox.classList.remove('hidden');
+          }
+          
+          // Event listeners
+          searchInput.addEventListener('input', function() {
+            fetchSuggestions(this.value.trim());
+          });
+          
+          searchInput.addEventListener('focus', function() {
+            if (this.value.trim().length >= 2) {
+              fetchSuggestions(this.value.trim());
+            }
+          });
+          
+          // Close suggestions when clicking outside
+          document.addEventListener('click', function(event) {
+            if (!searchInput.contains(event.target) && !suggestionsBox.contains(event.target)) {
+              suggestionsBox.classList.add('hidden');
+            }
+          });
+          
+          // Add search bar to mobile menu
+          const mobileMenu = document.getElementById('mobile-menu');
+          if (mobileMenu) {
+            const mobileSearchContainer = document.createElement('div');
+            mobileSearchContainer.className = 'px-4 py-2';
+            mobileSearchContainer.innerHTML = `
+              <form action="{{ url_for('main.index') }}" method="GET" class="relative">
+                <input 
+                  type="text" 
+                  name="q"
+                  placeholder="Tìm kiếm bài viết..." 
+                  value="{{ request.args.get('q', '') }}"
+                  class="w-full py-2 pl-10 pr-4 rounded-full bg-blue-700 text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all duration-200"
+                >
+                <button type="submit" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-200">
+                  <i class="fas fa-search"></i>
+                </button>
+              </form>
+            `;
+            mobileMenu.insertBefore(mobileSearchContainer, mobileMenu.firstChild);
+          }
+        }
       });
     </script>
   </body>
